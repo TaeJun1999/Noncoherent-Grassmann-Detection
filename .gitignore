@@ -1,0 +1,10 @@
+data
+checkpoints/
+outputs/
+wandb/
+logs/
+*.pt
+*.ckpt
+__pycache__/
+graphify-out/
+.claude/settings.local.json
