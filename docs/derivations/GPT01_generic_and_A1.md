@@ -1,303 +1,451 @@
-# [DERIV] GPT01 — 공통 층 M 일반화와 A1 Grass-Lattice 이식
+# GPT01 — 공통 층 M 일반화와 A1 Grass-Lattice 이식
 
-**상태: 제안 / 서버 검산 전에는 확정 아님.** 작성일 2026-09-18.
-기준 저장소는 `TaeJun1999/Noncoherent-Grassmann-Detection`, 읽은 기준 커밋은
-`5fd114a21750354b370525e51d8fe5170e933c35`이다. 산출물은 이 문서 하나이며,
-`00_STATE.md`, 결과 로그, 실행 라이브러리를 수정하지 않는다.
+날짜: 2026-09-18. 상태: **[VERIFY] 제안, 독립 검산 전**.
+입력: `EXP_M2_gate_spec.md` §3·4·6·7·8, `cubesplit_gap.py` R6의 해당 함수,
+`00_STATE.md` “확정”, `02_RESULTS_LOG.md` R1·R6의 규약, `03_LIT_LOG.md` L1 A1·E.
+실제 첨부 사양 파일명은 `EXP_M2_gate_spec (1).md`다.
+MATLAB 입력은 `GrassLatticeEncoding.m`, `GrassLatticeDecoding.m`, `thnt.m`,
+`Bin2Gray.m`, `Gray2Bin.m`, `FindAlphaOpt.m`의 아래 줄 범위다.
+저장소 기준 커밋은 `5fd114a21750354b370525e51d8fe5170e933c35`다.
+원본 R6 blob은 `ccf086b1c09e7b393187014817c96f590b222a60`이며 첨부 파일과 일치한다.
 
-## 1. 질문과 범위
+## 결론
 
-[EXP 사양](../handoff/EXP_M2_gate_spec.md) §3·4·6에 따라 공통 함수 네 개를
-`M>=1`로 일반화하고, A1의 `M=2` 인코더·Gray 라벨·그리디 복호기를 배치 구현한다.
-A2, G2, 새로운 soft demapper, SER/BLER 스윕, 성능 추정은 포함하지 않는다.
-이 문서의 숫자 리터럴은 차원·입력 fixture·수치 허용오차·사양의 검산 기준이며,
-실험 성능이나 예상 격차가 아니다.
+[VERIFY] 공통 네 함수의 M 일반화와 배치 A1 인코더·Gray 라벨·G1 코드 초안을 제시한다.
+특징은 T²를 유지하며, κ는 `(rho*T/M)/(1+rho*T/M)`이다. R6의 gvec과 기존 LLR을 그대로 쓴다.
+격자는 필수 입력이다. MATLAB 대조와 실제 gate 격자 검산 전에는 참조 구현과의 동일성을 확정하지 않는다.
 
-## 2. 전제와 출처
+## 유도
 
-[00_STATE.md의 확정 표](../00_STATE.md), R1의 posterior와 충분통계량은 인용만 한다.
-아래 κ 계산은 그 식에 이번 전력 정규화를 대입하는 계산이며 posterior 재유도가 아니다.
-문헌 근거는 [03_LIT_LOG.md](../03_LIT_LOG.md) L1의 **A1 및 E의 grassbox 항목**뿐이다.
-논문 본문을 새로 열람했다고 주장하지 않는다. 아래 사상의 직접 근거는 첨부 실행 소스다.
-새 문헌이 필요한 주장에는 `[LIT] 확인 필요`를 붙여야 하며 여기서는 새 논문을 추가하지 않는다.
+### 1. 출처, 범위, 코드 계약
 
-코드 줄 주석의 약어는 다음과 같다. 줄 번호는 첨부 파일의 빈 줄·주석도 포함하는 1-기반 번호다.
+사양은 [EXP §3·4·6](../handoff/EXP_M2_gate_spec.md)이다.
+posterior와 충분통계량은 [STATE “확정”](../00_STATE.md), R1을 인용만 한다.
+문헌 인용은 [LIT L1 A1·E](../03_LIT_LOG.md)로 제한한다.
+아래 사상의 직접 근거는 첨부 MATLAB 실행문이다. 논문 본문을 새로 확인했다는 뜻이 아니다.
+A2, G2, soft demapper, 성능 스윕과 성능 추정은 이번 산출물에 없다.
+
+줄 번호는 첨부 원본의 빈 줄·주석을 포함한 1-기반이다.
 `E=GrassLatticeEncoding.m`, `D=GrassLatticeDecoding.m`, `H=thnt.m`,
-`BG=Bin2Gray.m`, `GB=Gray2Bin.m`, `F=FindAlphaOpt.m`.
-`NEW`는 대응 실행문이 없는 어댑터·검증·일반화 또는 명시한 수치적 재표현이다.
-`NEW(D124)`는 D124의 방정식을 다른 수치 방식으로 푼 신규 줄이지 직역이라는 뜻이 아니다.
-모든 Python 실행문에 출처 또는 `NEW`가 있다. 라이선스 고지와 빈 줄은 실행문이 아니다.
+`BG=Bin2Gray.m`, `GB=Gray2Bin.m`, `F=FindAlphaOpt.m`으로 표시한다.
+`NEW`는 MATLAB에 대응 실행문이 없는 어댑터·검사·일반화다.
+`NEW(D124)`는 그 방정식의 **신규 수치 구현**이며 fzero의 직역이 아니다.
+모든 Python 실행문에 원본 줄 또는 `NEW`를 붙였다.
 
-**격자 값은 사양에 아직 없다.** F91, F99–100은
-`lattice[j]=alpha+j(1-2alpha)/(Q-1)`를 사용하지만 gate의 alpha를 고정하지 않는다.
-따라서 생성자에는 `lattice`가 필수이며 midpoint 격자나 최적 alpha를 임의로 넣지 않았다.
-뒤의 alpha fixture는 F58의 탐색 범위에 있는 입력을 검산에만 사용한다.
-실제 gate 전에는 저자가 격자 또는 alpha를 설정 파일에 고정하고 같은 검산을 다시 실행해야 한다.
-E/D의 입력 주석은 lattice 길이를 좌표 수처럼 적지만, 실제 E55–57과 F91,100에서
-lattice 길이는 **Q**다. 포트는 이 실행부를 따른다.
-
-### R6와 맞추는 인터페이스
-
-| 대상 | 계약 |
+| 함수 또는 표현 | 계약 |
 |---|---|
-| `channel(rng,X,N,rho)` | 기존 `(n,T)`와 신규 `(n,T,M)`를 받아 `(n,T,N)` 반환. 인자 순서 그대로 |
-| `kappa_of(rho,T,M=1)` | 기존 선행 인자·스칼라 의미 유지. `rho`는 선형 SNR |
-| `codebook_features(C)` | 기존 `C=(T,K)` 또는 신규 `C=(T,M,K)` → `Phi=(K,T²)`, float32 |
-| `precompute_lists_sorted(cs,C,bits,eta_max,chunk=256,topm=2048,log=None)` | 기존 순서 그대로. `(lists,nfall)` 반환, lists는 `(K,B,2,eta_max)` int32 |
-| `GrassLattice(T,B0,lattice)` | B0는 사양의 B′. `from_index`, `index`, `bits`, `from_bits`, `symbols`, `codebook` 명칭을 R6에 맞춤 |
-| A1의 `codebook()` | `(C,bits)` 반환. C의 codeword 축은 R6처럼 마지막, bits는 `(K,B)` uint8 |
-| `decode_G1(gl,G)` / `decode_G1_Y(gl,Y)` | 각각 `(n,T,T)` / `(n,T,N)`에서 **0-기반 `(n,)` int64 인덱스** 반환 |
+| `channel(rng,X,N,rho)` | 기존 `(n,T)` 또는 신규 `(n,T,M)` → `(n,T,N)` |
+| `kappa_of(rho,T,M=1)` | 기존 선행 인자 순서 유지. rho는 선형 SNR |
+| `codebook_features(C)` | `(T,K)` 또는 `(T,M,K)` → `(K,T²)` float32 |
+| `precompute_lists_sorted(cs,C,bits,eta_max,chunk=256,topm=2048,log=None)` | 기존 인자 순서 유지. `(lists,nfall)` 반환 |
+| `lists` | `(K,B,2,eta_max)` int32. 자기 자신도 해당 bit-value 집합에 포함 |
+| `GrassLattice(T,B0,lattice)` | B0는 사양의 B′. M=2, T≥4 |
+| A1 `from_index`, `index` | 각각 `(n,)` → `(n,nd)`, `(n,nd)` → `(n,)` |
+| A1 `bits`, `from_bits` | digits와 `(n,B)` uint8 Gray payload 사이의 변환 |
+| A1 `symbols`, `codebook` | `(n,T,2)` 및 `(C,bits)` 반환. C의 codeword 축은 마지막 |
+| `decode_G1(gl,G)`, `decode_G1_Y(gl,Y)` | 각각 `(n,T,T)`, `(n,T,N)` → 0-기반 `(n,)` int64 |
 
-A1에는 Cube-split cell이 없으므로 라벨 메서드에 가짜 cell을 만들지 않는다.
-`from_index(k)`는 `(n,nd)` digits, `index(digits)`는 `(n,)`,
-`symbols(digits)`는 `(n,T,2)`다. 이는 신규 A1 표현의 차이이며 기존 R6 메서드는 바꾸지 않는다.
-`N=T`이면 배열 모양만으로 Y와 G를 구분할 수 없어 입력 종류를 명시하는 두 API로 나눴다.
+A1에는 Cube-split cell이 없다. 가짜 cell 인자를 추가하지 않는다.
+`N=T`일 때 모양만으로 Y와 G를 구별할 수 없어 입력 종류별 API를 명시했다.
+G1에는 N≥2와 수치적으로 식별 가능한 rank-two subspace를 요구한다.
+공통 채널은 N≥1을 받는다. 복호 배치는 n≥1을 대상으로 한다.
+
 `exact_llr`, `lse`, `snr_at`, `gram`, `LDPC`, `make_ldpc`, `gf2_rref`,
-`gvec`, `ml_metrics_fast`, `exact_llr_chunked`는 **원본 import**만 한다.
-기존 `ml_metrics`, `metric_of`, `soft_P26_multi`의 rank-one C 접근까지 일반화됐다고 주장하지 않는다.
-이번 코드에 새로운 soft 복호기를 넣지 않았다.
+`gvec`, `ml_metrics_fast`, `exact_llr_chunked`는 원본 import만 한다.
+R6의 `metric_of`, `ml_metrics`, `soft_P26_multi`까지 M 일반화됐다는 주장은 하지 않는다.
+production 모듈은 `code/m2_gate.py`로 추출하도록 작성했다.
 
-## 3. 공통 층 유도
+**격자 미지정:** EXP §4는 alpha를 고정하지 않았다.
+F91·99–100의 격자는 `lattice[j]=alpha+j*(1-2*alpha)/(Q-1)`이다.
+따라서 생성자의 lattice를 필수로 받는다. 임의의 최적 alpha나 midpoint 기본값을 만들지 않는다.
+검산의 alpha는 F58에 있는 **입력 fixture**일 뿐, gate 설정이 아니다.
+E/D의 lattice 크기 주석과 실행부가 다르다. E55–57·F91·100의 실행부대로 길이는 Q다.
 
-### 3.1 전력 정규화와 κ — STATE/R1에 대입
+### 2. 공통 층의 수학 — [VERIFY V1]
 
-`a=rho*T/M`라 두면 사양의 모델은
-\[
-Y=\sqrt a\,XH+Z,\quad X^HX=I_M,\quad H_{mn},Z_{tn}\sim\mathcal{CN}(0,1).
-\]
-\[
-\mathbb E\|\sqrt aXH\|_F^2=a\,\mathbb E\|H\|_F^2=aMN=\rho TN.
-\]
-따라서 채널 사용당·수신 안테나당 신호 대 잡음 에너지 비는 rho이며,
+#### 2.1 채널과 κ의 정규화
+
+사양 §3에서 `a=rho*T/M`라 놓는다.
+
+$$
+Y=\sqrt a\,XH+Z,\qquad X^HX=I_M,\qquad a=\frac{\rho T}{M}.
+\tag{1}
+$$
+
+H와 Z의 원소 분산은 모두 1이다. 따라서
+
+$$
+\mathbb E\|\sqrt aXH\|_F^2
+=a\,\mathbb E\operatorname{tr}(H^HX^HXH)
+=a\,\mathbb E\|H\|_F^2=aMN=\rho TN.
+\tag{2}
+$$
+
 수신 안테나당 블록 신호 에너지는 rho*T다.
-[STATE/R1]의 확정 식 `κ=γ/[σ²(γ+σ²)]`에서 이 모델의 **γ=a**, **σ²=1**을 대입하면
-\[
-\boxed{\kappa=\frac{\rho T/M}{1+\rho T/M}}.
-\]
-`M=1`이면 `a=rho*T`, `κ=rho*T/(1+rho*T)`이고
-`XH=x hᵀ`이므로 R6 신호식으로 환원된다. 코드도 난수 호출의 순서와 M=1 곱셈 순서를 보존한다.
-SNR을 dB로 기록할 때는 `10log10(rho)`라고 명시해야 한다.
-`10log10(a)=10log10(rho*T)-10log10(M)`는 축/계수 변환일 뿐,
-M 변화에 따른 SER 곡선의 일정한 이동이나 성능 격차를 예측하는 식이 아니다.
+채널 사용당·수신 안테나당 신호 에너지와 잡음 분산의 비가 rho다.
+STATE/R1의 확정 식 `κ=γ/[σ²(γ+σ²)]`에 **γ=a, σ²=1**만 대입한다.
 
-### 3.2 trace 항등식과 gvec의 부호
+$$
+\boxed{\kappa=\frac{a}{1+a}=\frac{\rho T/M}{1+\rho T/M}}.
+\tag{3}
+$$
 
-`P_k=X_kX_k^H`라 두고 Hermitian 내적을
-`<A,B>=Re tr(A^H B)`로 정의하면, Hermitian G에 대해
-\[
+이는 posterior 재유도가 아니다. M=1이면 a=rho*T이며 R6의 κ가 된다.
+또한 `XH=x hᵀ`이므로 신호 생성식도 R6로 환원된다.
+코드는 M=1의 난수 호출 순서와 원소별 곱셈 순서를 보존한다.
+`10log10(a)=10log10(rho*T)-10log10(M)`는 계수 변환이다.
+이 식에서 서로 다른 codebook의 SER 곡선이 일정하게 이동한다고 추론하지 않는다.
+
+#### 2.2 trace와 기존 gvec의 정확한 짝
+
+`P_k=X_kX_k^H`, `⟨A,B⟩=Re tr(A^HB)`로 정의한다.
+G가 Hermitian이면 trace 순환성과 실수성에서
+
+$$
 \operatorname{tr}(X_k^HGX_k)=\operatorname{tr}(GP_k)=\langle G,P_k\rangle.
-\]
-첫 등호는 trace 순환성이고 둘째는 `G=G^H`와 trace의 실수성이다.
-이 항등식 자체는 X가 semiunitary일 필요도 없다.
-다만 R6 `codebook_features`의 내부 P는 이 P_k가 아니라
-\[
+\tag{4}
+$$
+
+항등식 자체에는 X의 semiunitarity도 필요하지 않다.
+다만 R6 특징의 내부 배열은 P_k가 아니라 다음 배열이다.
+
+$$
 \widetilde P_{ij,k}=\sum_m\overline{X_{im,k}}X_{jm,k}
-=\overline{(P_k)_{ij}}=(P_k)_{ji}
-\]
-이다. 그러므로 실제로 저장할 특징은 R6와 동일하게
-\[
-\Phi_k=(\widetilde P_{ii,k};\ \Re\widetilde P_{ij,k};\ \Im\widetilde P_{ij,k})_{i<j},
-\quad
-g(G)=(G_{ii};\ 2\Re G_{ij};\ -2\Im G_{ij})_{i<j}.
-\]
-\[
-\Phi_kg(G)^T=\sum_iG_{ii}P_{ii,k}
- +2\Re\sum_{i<j}G_{ij}\widetilde P_{ij,k}
- =\operatorname{tr}(GP_k).
-\]
-특징수는 `T+2*T(T-1)/2=T²`다. **P_k의 상삼각 허수부를 그대로 넣으면 부호가 틀린다.**
-`np.triu_indices(T,1)`의 순서와 diagonal → real upper → imaginary upper의 순서를 유지한다.
-따라서 R6 `gvec`·빠른 ML·chunked LLR은 수정하지 않는다.
+=\overline{(P_k)_{ij}}=(P_k)_{ji}.
+\tag{5}
+$$
 
-### 3.3 chordal 리스트와 안정 정렬
+R6 순서 그대로 diagonal, upper-real, upper-imag를 연결한다.
 
-모든 codeword의 rank가 같은 M이고 semiunitary이면
-\[
-s_{ij}=\|X_i^HX_j\|_F^2=\operatorname{tr}(P_iP_j),\qquad
- d_c^2=M-s_{ij}=\tfrac12\|P_i-P_j\|_F^2.
-\]
-따라서 s를 내림차순으로 정렬한다. `M=1`에서는 `s=|c_i^Hc_j|²`다.
-정규화 거리 `d_c²/M`를 쓰더라도 이웃 순서는 같지만 구현에 별도 재스케일링은 넣지 않는다.
-자기 자신도 해당 bit-value 리스트에 포함한다.
+$$
+\begin{aligned}
+\Phi_k&=(\widetilde P_{ii,k};\Re\widetilde P_{ij,k};\Im\widetilde P_{ij,k})_{i<j},\\
+g(G)&=(G_{ii};2\Re G_{ij};-2\Im G_{ij})_{i<j}.
+\end{aligned}
+\tag{6}
+$$
 
-R6의 **상위 topm 풀 → bit/value별 stable sort → 부족한 행의 전체 후보 fallback**을 유지한다.
-다만 기존 `argpartition` 출력 순서는 동률에서 인덱스 순서가 아니다.
-뒤쪽 stable sort만으로는 topm 경계에서 빠진 동점 후보를 복구할 수도 없다.
-이에 다음 두 줄기의 보완을 `NEW`로 표시했다: 풀의 인덱스를 먼저 오름차순으로 정렬하고,
-풀 경계를 가로지르는 동률이 eta번째 선택에 걸릴 때만 전체 행으로 fallback한다.
-계산된 동일 점수에서는 작은 codeword 인덱스가 먼저 온다.
-이 동률 규칙 때문에 기존 R6 리스트와 동점 선택이 달라질 수 있으며 이를 M=1 수식 불일치로
-취급하지 않는다. 비동점의 거리 순서는 같다. float32 계산으로 갈라진 수학적 동률까지
-동점으로 합치지 않는다. tolerance 기반 임의 그룹화는 하지 않는다.
+상삼각 항과 하삼각 항을 쌍으로 묶으면
 
-`nfall`은 R6의 실제 증가 방식대로 **(중심,bit,value) fallback 행 수**다.
-고유 중심의 개수와 다르며, 이번에는 경계 동률 fallback도 포함한다.
-fallback의 `for rr in bad_rows`는 Boolean 행 선택과 batched argsort로 바꾸었다.
-루프는 codebook chunk·bit·bit-value뿐이며 수신 블록별 Python 루프는 없다.
+$$
+\begin{aligned}
+\Phi_kg(G)^T
+&=\sum_iG_{ii}P_{ii,k}+2\Re\sum_{i<j}G_{ij}\widetilde P_{ij,k}\\
+&=\sum_{ij}G_{ij}P_{ji,k}=\operatorname{tr}(GP_k).
+\end{aligned}
+\tag{7}
+$$
 
-## 4. A1의 각 MATLAB 단계를 수식으로 읽기
+특징 차원은 `T+2*T(T-1)/2=T²`다.
+**실제 P_k의 상삼각 허수부를 그대로 넣으면 기존 gvec과 부호가 어긋난다.**
+코드는 `C.conj(),C` 순서의 einsum을 유지한다.
+`np.triu_indices(T,1)`의 순서도 유지하므로 기존 fast ML과 chunked LLR을 재사용한다.
 
-이 절의 모든 좌표 설명은 M=2, `d=T-2`, `nd=4d`, `Q=2^B0`, `B=nd*B0`다.
-A1 포트는 `T>=4`를 받는다. `T=3`이면 원본의 `thnt(T-3,...)`가 양의 차수가 아니므로 지원하지 않는다.
+#### 2.3 chordal 근접도와 두 단계 리스트
 
-### 4.1 E53–57, E87–102: 좌표 선택과 Gaussian 역변환
+같은 rank M의 semiunitary codeword에 대해
 
-MATLAB symbol `s_j`와 Python digit `d_j`의 관계는 `s_j=d_j+1`이다.
-`x_tilde_j=lattice[d_j]`이고, 좌표 순서는
-\[
-(\Re r_1,\Im r_1,\ldots,\Re r_d,\Im r_d,
-  \Re s_1,\Im s_1,\ldots,\Re s_d,\Im s_d)
-\]
-에 대응하는 **확률 좌표** 순서다. 확률 좌표 x에 대해 Gaussian 성분은
-`Phi_N^{-1}(x)/sqrt(2)`다. 여기서 Phi_N은 표준 실수 정규 CDF다.
-E96–99의 표준편차는 1/sqrt(2)이므로 복소 r,s의 각 성분은 실수부·허수부 분산이 각각 1/2이다.
-`ndtri`를 쓰며 추가 sqrt(2)를 곱하지 않는다.
+$$
+\begin{aligned}
+s_{ij}&=\|X_i^HX_j\|_F^2
+=\operatorname{tr}(X_j^HX_iX_i^HX_j)=\operatorname{tr}(P_iP_j),\\
+\|P_i-P_j\|_F^2&=\operatorname{tr}(P_i)+\operatorname{tr}(P_j)-2\operatorname{tr}(P_iP_j)
+=2M-2s_{ij},\\
+d_c^2(X_i,X_j)&=M-s_{ij}=\tfrac12\|P_i-P_j\|_F^2.
+\end{aligned}
+\tag{8}
+$$
 
-### 4.2 H34–35: thnt의 방정식, 유일성, 역함수
+따라서 s를 내림차순으로 정렬한다. M=1이면 `s=|c_i^Hc_j|²`다.
+정규화 거리 `d_c²/M`도 같은 순서를 준다. 구현에 별도 정규화를 넣지는 않는다.
 
-원본의 `theta=thnt(n,t)`는 [0,1]에서 다음 식을 푼다.
-\[
-F_n(\theta)=(n+1)\theta^{2n}-n\theta^{2n+2}
-=1-e^{-t^2}\sum_{j=0}^{n-1}\frac{t^{2j}}{j!}=:P(n,t^2).
-\]
-오른쪽은 정규화 lower incomplete gamma다. `z=theta²`라 놓으면
-\[
-F_n(\theta)=(n+1)z^n-nz^{n+1}=I_z(n,2),
-\quad \frac{d}{dz}I_z(n,2)=n(n+1)z^{n-1}(1-z)>0.
-\]
-따라서 내부 구간에서 근은 유일하고
-\[
-\theta=\sqrt{I^{-1}_{P(n,t^2)}(n,2)},\qquad
- t=\sqrt{P^{-1}(n,I_{\theta^2}(n,2))}.
-\]
-이는 H34의 유한합에서 직접 얻은 재표현이지 새 문헌의 식이 아니다.
-원본 fzero의 반복 경로를 복제하는 대신, 기존 의존성 SciPy의 벡터화된 beta/gamma
-특수함수로 **동일 방정식의 근**을 구한다. 큰 확률에서는 complement를 써서 `1-p` 상쇄를 피한다.
-NumPy가 배치·행렬 계산을 담당하며 별도 패키지나 scalar Python root loop를 추가하지 않는다.
-MATLAB과 마지막 비트까지 같다는 주장은 아니며 참조 대조는 별도다.
+R6의 `topm` 전체 풀 → bit/value별 stable sort → 부족한 행의 전체 fallback을 유지한다.
+`argpartition`의 풀 순서는 인덱스 순서가 아니다.
+그래서 풀 내부 stable sort만으로 전역적인 동점 우선순위가 정해지지는 않는다.
+이번 **NEW 동점 정책**은 작은 codeword 인덱스 우선이다.
+풀의 인덱스를 먼저 오름차순 정렬한다.
+풀 경계의 동점이 eta번째 선택에 영향을 주면 그 행만 전체 후보로 fallback한다.
 
-영점에서 `theta/t → [(n+1)!]^(-1/(2n))`이고 역비는 그 역수다.
-이는 `P(n,t²)~t^(2n)/n!`와 `I_(theta²)(n,2)~(n+1)theta^(2n)`에서 따른다.
-`_radial`은 이 극한으로 0/0을 없애며, `np.where` 양쪽에서 먼저 나눗셈을 평가하지 않는다.
+정당화는 다음과 같다. 풀 밖 점수는 풀의 최저 점수 이하이다.
+선택된 마지막 점수가 그 최저 점수보다 크면 풀 밖 후보는 순서를 바꿀 수 없다.
+같고 동점 후보가 풀 밖에도 있으면 전체 stable sort가 필요하다.
+유효 후보가 부족한 경우에도 전체 fallback이 필요하다.
+이 두 경우를 `bad`로 묶어 배치 처리한다. R6의 `for rr` 루프는 만들지 않는다.
 
-### 4.3 E107–118: 직교 분해와 두 radial 사상
+이 정책은 R6의 기존 **동점 선택**을 바꿀 수 있다. 같은 리스트 바이트를 보장하지 않는다.
+비동점 거리 순서는 보존한다. float32에서 갈라진 수학적 동점을 tolerance로 합치지 않는다.
+`nfall`은 고유 중심 수가 아니라 `(중심,bit,value)` fallback 행 수다.
+이번에는 경계 동점 fallback도 포함한다. loop는 codebook chunk·bit·bit-value 축에만 있다.
 
-\[
-u=\frac{r^Hs}{\|r\|^2}r,\qquad \bar s=s-u,\qquad r^H\bar s=0,
-\]
-\[
-p=\frac{r}{\|r\|}\operatorname{thnt}(T-2,\|r\|),\quad
+### 3. A1 MATLAB 단계의 수식 — [VERIFY V2]
+
+여기서 M=2, `d=T-2`, `nd=4d`, `Q=2^B0`, `B=nd*B0`다.
+T≥4를 받는다. T=3은 H의 양의 차수 조건 `T-3≥1`을 만족하지 않는다.
+이 절의 W는 MATLAB의 국소 사상 변수다. 프로젝트 채널 잡음 W를 재정의하지 않는다.
+상단 square root는 A_top으로 써서 eigenframe A와 구분한다.
+
+#### 3.1 E53–57, E87–102: 격자와 Gaussian 역변환
+
+MATLAB symbol과 Python digit의 관계는 `symbol_j=digit_j+1`이다.
+확률 좌표 `x_j=lattice[digit_j]`를 선택한다.
+배열 순서는 `(r의 실수,허수 교대 d개; s의 실수,허수 교대 d개)`다.
+표준 실수 정규 CDF를 F_N이라 쓰면
+
+$$
+\begin{aligned}
+r_\ell&=\frac{F_N^{-1}(x_{2\ell-1})+iF_N^{-1}(x_{2\ell})}{\sqrt2},\\
+s_\ell&=\frac{F_N^{-1}(x_{2d+2\ell-1})+iF_N^{-1}(x_{2d+2\ell})}{\sqrt2},\quad 1\le\ell\le d.
+\end{aligned}
+\tag{9}
+$$
+
+E96–99의 `norminv(...,0,1/sqrt(2))`를 그대로 표현했다.
+독립 **연속 균등** 확률 좌표에서만 실수·허수 분산 1/2의 Gaussian이 나온다.
+유한 격자 좌표에 Gaussian 분포나 정확한 분산 1/2를 주장하지 않는다.
+E129의 균등분포 설명도 유한 codebook의 분포를 뜻하지 않는다.
+
+#### 3.2 H34–35: thnt 방정식과 벡터화 가능한 근
+
+MATLAB H의 차수 n을 여기서는 q라 쓴다. 배치 크기 n과 구별하기 위해서다.
+`theta=thnt(q,t)`가 만족하는 식은
+
+$$
+(q+1)\theta^{2q}-q\theta^{2q+2}
+=1-e^{-t^2}\sum_{j=0}^{q-1}\frac{t^{2j}}{j!}=: \mathsf P_q(t^2).
+\tag{10}
+$$
+
+우변은 정규화 lower incomplete gamma다.
+좌변에 `z=theta²`를 대입한다.
+정규화 incomplete beta의 적분을 직접 계산하면
+
+$$
+I_z(q,2)=q(q+1)\int_0^z u^{q-1}(1-u)\,du
+=(q+1)z^q-qz^{q+1}.
+\tag{11}
+$$
+
+미분은 `q(q+1)z^(q-1)(1-z)>0`이고 양 끝 값은 0,1이다.
+따라서 내부 근은 유일하며 순방향과 역방향은
+
+$$
+\theta=\sqrt{I^{-1}_{\mathsf P_q(t^2)}(q,2)},\qquad
+t=\sqrt{\mathsf P_q^{-1}\bigl(I_{\theta^2}(q,2)\bigr)}.
+\tag{12}
+$$
+
+이는 H의 방정식에서 유도한 신규 수치 표현이다. 새로운 논문 수식으로 인용하지 않는다.
+NumPy 배치 연산과 기존 의존성 SciPy의 beta/gamma 특수함수를 쓴다.
+scalar fzero를 Python 블록 루프로 감싸지 않는다.
+큰 확률은 complement를 사용해 `1-p`의 상쇄를 피한다.
+MATLAB의 fzero 반복 경로나 마지막 부동소수 비트까지 복제한다는 주장은 하지 않는다.
+
+영점은 점근식을 비교해서 처리한다.
+
+$$
+\mathsf P_q(t^2)\sim\frac{t^{2q}}{q!},\quad
+I_{\theta^2}(q,2)\sim(q+1)\theta^{2q}
+\quad\Longrightarrow\quad
+\lim_{t\to0}\frac{\theta}{t}=[(q+1)!]^{-1/(2q)}.
+\tag{13}
+$$
+
+역방향 비율은 그 역수다. `np.divide(...,where=...)`로 0/0의 선행 평가를 막는다.
+
+#### 3.3 E107–118: 직교 분해와 radial 사상
+
+$$
+u=\frac{r^Hs}{\|r\|^2}r,\qquad \bar s=s-u,\qquad r^H\bar s=0.
+\tag{14}
+$$
+
+E112와 E113–118은 각각
+
+$$
+p=\frac{r}{\|r\|}\operatorname{thnt}(T-2,\|r\|),\qquad
 \bar q=\frac{\bar s}{\|\bar s\|}\operatorname{thnt}(T-3,\|\bar s\|).
-\]
-E114–118은 `bar s=0`이면 `bar q=0`으로 정의한다. 여기에도 같은 영점 처리를 한다.
-반면 `r=0`이면 E108의 투영 방향이 정의되지 않는다. 임의 방향을 발명하지 않고 오류로 처리한다.
-표준의 짝수 Q 대칭 등간격 격자는 1/2을 포함하지 않지만, 사용자 지정 격자에는 이 전제가
-자동 보장되지 않으므로 생성된 codeword 검산에서 확인해야 한다.
+\tag{15}
+$$
 
-### 4.4 E121–134: 평행 성분, contraction, principal square root
+원본도 `bar s=0`이면 `bar q=0`으로 둔다.
+반면 r=0이면 E108의 투영 방향이 정의되지 않는다. 포트는 임의 방향을 만들지 않고 오류를 낸다.
+짝수 Q의 대칭 등간격 격자는 1/2을 포함하지 않는다.
+사용자 지정 격자가 같은 조건을 만족한다고 가정하지는 않는다.
 
-\[
-v=\begin{cases}
+#### 3.4 E121–134: 평행 성분과 semiunitary 행렬
+
+$$
+\begin{aligned}
+v&=\begin{cases}
 0,&u=0,\\
 \dfrac{u}{\|u\|}\sqrt{1-e^{-\|u\|^2}}
- \sqrt{(1-\|p\|^2)(1-\|\bar q\|^2)},&u\ne0,
-\end{cases}
-\qquad W=[p,\bar q+v],\qquad X=\begin{bmatrix}(I_2-W^HW)^{1/2}\\W\end{bmatrix}.
-\]
-`v`는 p와 평행, `bar q`는 p에 직교한다. `a=||p||`, `b=||bar q||`, `c=||v||`라 하면
-\[
-\det(I-W^HW)=(1-a^2)(1-b^2)-c^2
-=(1-a^2)(1-b^2)e^{-\|u\|^2}>0
-\]
-이므로 내부의 유한 입력에서는 위쪽 블록은 positive definite다.
-principal Hermitian square root를 A라 하면 `X^HX=A²+W^HW=I₂`다.
-Cholesky나 열별 정규화로 A를 바꾸면 참조 행렬이 달라진다. 포트는 eig 재구성을 사용한다.
+\sqrt{(1-\|p\|^2)(1-\|\bar q\|^2)},&u\ne0,
+\end{cases}\\
+W&=[p,\bar q+v],\qquad
+A_{\rm top}=(I_2-W^HW)^{1/2},\qquad
+X=\begin{bmatrix}A_{\rm top}\\W\end{bmatrix}.
+\end{aligned}
+\tag{16}
+$$
 
-### 4.5 D54–58, D104–108: subspace 추정과 polar gauge 제거
+v는 p와 평행하고 bar q는 p에 직교한다.
+a=||p||, b=||bar q||, c=||v||라 쓰면
+
+$$
+\det(I_2-W^HW)=(1-a^2)(1-b^2)-c^2
+=(1-a^2)(1-b^2)e^{-\|u\|^2}>0.
+\tag{17}
+$$
+
+유한 내부 입력에서는 a,b<1이다.
+첫 주대각 minor도 `1-a²>0`이므로 `I₂-WᴴW`는 positive definite다.
+principal Hermitian square root를 취하면
+
+$$
+X^HX=A_{\rm top}^HA_{\rm top}+W^HW
+=A_{\rm top}^2+W^HW=I_2.
+\tag{18}
+$$
+
+따라서 E134의 sqrtm은 Hermitian eig 재구성으로 계산한다.
+Cholesky, 원소별 sqrt, 임의의 열별 정규화로 바꾸지 않는다.
+
+#### 3.5 D54–58, D104–108: subspace와 polar gauge
 
 Y의 상위 두 left singular vector로 `C=[C1;C2]`를 만든다.
-`C1=U1 S1 V1^H`, `Q=U1 V1^H`, `W=C2 Q^H`가 D104–108이다.
-무잡음에서 `rank(H)=2`이면 C는 `X R` 형태이고 R은 unitary다.
-위쪽 A가 positive definite이므로 `polar(A R)=R`; 따라서 `C2 Q^H=W`가 복원된다.
-이는 부호 두 개만 맞추는 과정이 아니라 임의의 2×2 unitary basis mixing을 제거하는 과정이다.
-G 경로는 같은 subspace를 `eigh(YY^H)`로 얻는다. 충분통계량 주장은 STATE/R1을 인용한다.
+원본의 두 번째 SVD와 gauge 제거는
 
-### 4.6 D113–130: inverse radial map
+$$
+C_1=U_1S_1V_1^H,\qquad Q=U_1V_1^H,\qquad W=C_2Q^H.
+\tag{19}
+$$
 
-\[
-p=W_{:,1},\quad t=W_{:,2},\quad v=\frac{p^Ht}{\|p\|^2}p,
-\quad \bar q=t-v,
-\quad D_0=\sqrt{(1-\|p\|^2)(1-\|\bar q\|^2)},\quad a_0=\|v\|/D_0.
-\]
-D119–121의 비음수 근과 방향은
-\[
-\|u\|=\sqrt{-\log(1-a_0^2)},\qquad u=\|u\|\,v/\|v\|.
-\]
-D124–127의 두 근은 §4.2의 역함수로 얻어
-\[
-r=\frac{p}{\|p\|}\sqrt{P^{-1}(T-2,I_{\|p\|^2}(T-2,2))},\quad
-\bar s=\frac{\bar q}{\|\bar q\|}\sqrt{P^{-1}(T-3,I_{\|\bar q\|^2}(T-3,2))},\quad
-s=\bar s+u.
-\]
-**원본 D121,127에는 영점 가드가 없다.** `v=0`이면 `u=0`, `bar q=0`이면 `bar s=0`이라는
-연속극한 처리를 신규 확장으로 명시한다. `u/v`의 크기 비는 v→0에서 `1/D0`이다.
-이 확장을 원본에서 이미 구현했다고 적지 않는다. `p=0`, singular C1, 정확히 0인 D0는
-다른 비식별 경계이므로 오류로 처리하고, 무잡음 검산에서 그런 블록을 제외하거나 재추출하지 않는다.
+무잡음, rho>0, rank(H)=2이면 `C=XR`인 unitary R이 존재한다.
+이때 `C1=A_top R`, `C2=W R`이다.
+A_top이 positive definite이므로
 
-### 4.7 D135–163: CDF와 hard decision
+$$
+\operatorname{polar}(A_{\rm top}R)
+=A_{\rm top}R(R^HA_{\rm top}^2R)^{-1/2}
+=A_{\rm top}RR^HA_{\rm top}^{-1}R=R.
+\tag{20}
+$$
 
-복원한 실수 성분 z에 대해 `x_hat=Phi_N(sqrt(2)*z)`를 계산하고
-\[
-\widehat d_j=\arg\min_{0\le q<Q}(\widehat x_j-\operatorname{lattice}[q])^2
-\]
-로 결정한다. D143–157의 `min`은 동점에서 첫 MATLAB 인덱스를 고른다.
-NumPy `argmin`의 첫 인덱스 규칙을 쓰면 0-기반으로 같다.
-`np.rint`는 half-to-even이고, R6의 `floor(Q*x_hat)`는 이 alpha 격자에 일반적으로 맞지 않는다.
-따라서 두 방식 모두 가져오지 않는다. D159–163의 순서로 digits를 만들고 R6식 인덱스로 변환한다.
+따라서 `C2 Qᴴ=W`가 복원된다.
+부호·위상뿐 아니라 선택된 두 차원 안의 모든 unitary basis mixing이 소거된다.
+G 경로는 `YYᴴ`의 상위 두 고유벡터로 같은 subspace를 얻는다.
+이 G1 계산이 전체 posterior를 subspace만으로 조건화한다는 주장은 하지 않는다.
 
-### 4.8 BG25–28, GB25–32, F113–116·128–130: 비트 라벨
+#### 3.6 D113–130: inverse radial 단계
 
-각 좌표의 B0자리 자연 이진 정수 q에 대해 Gray 정수는 `g=q XOR (q>>1)`다.
-좌표 안에서 MSB가 먼저 나오며, 복원은 Gray bit의 prefix XOR다.
-F114–115는 송신 payload가 Gray 라벨이라는 것을 보여 준다:
-`payload → Gray2Bin → bit2int → +1 → encoder`.
-수신은 `symbol-1 → int2bit → Bin2Gray`다. payload에 Bin2Gray를 먼저 적용하면 방향이 틀린다.
+$$
+p=W_{:,1},\quad t=W_{:,2},\quad
+v=\frac{p^Ht}{\|p\|^2}p,\quad \bar q=t-v,\quad
+D_0=\sqrt{(1-\|p\|^2)(1-\|\bar q\|^2)}.
+\tag{21}
+$$
 
-전역 codeword 번호는 R6처럼 `k=sum_j d_j Q^j`로 정한다.
-이는 MATLAB 인코더가 정의한 전역 번호가 아니라 **새로운 R6 통합 규약**이다.
-따라서 첫 좌표는 k의 최하위 자리이지만, 각 좌표의 label bit는 MSB 우선이다.
-`k`의 단순 이진 표현과 `bits[k]`를 같다고 가정해서는 안 된다.
+D119–121의 근은 `a0=||v||/D0`에 대해
 
-## 5. MATLAB → NumPy에서 반드시 구분할 것
+$$
+\|u\|=\sqrt{-\log(1-a_0^2)},\qquad
+u=\frac{\|u\|}{\|v\|}v.
+\tag{22}
+$$
 
-| 지점 | 이식 규약 |
+D124–127은 식 (12)를 적용한다.
+
+$$
+\begin{aligned}
+r&=\frac{p}{\|p\|}\sqrt{\mathsf P_{T-2}^{-1}\bigl(I_{\|p\|^2}(T-2,2)\bigr)},\\
+\bar s&=\frac{\bar q}{\|\bar q\|}\sqrt{\mathsf P_{T-3}^{-1}\bigl(I_{\|\bar q\|^2}(T-3,2)\bigr)},
+\qquad s=\bar s+u.
+\end{aligned}
+\tag{23}
+$$
+
+**원본 D121·127에는 영점 가드가 없다.**
+v=0이면 u=0, bar q=0이면 bar s=0이라는 연속극한을 **NEW 확장**으로 넣었다.
+v→0에서 `||u||/||v||→1/D0`이고 다른 두 비율은 식 (13)의 역수다.
+원본이 이미 이 확장을 구현했다고 적지 않는다.
+p=0, singular C1, D0=0에는 임의 인덱스를 만들지 않는다. 오류로 처리한다.
+
+#### 3.7 D135–163: 정규 CDF와 hard decision
+
+복원한 r,s의 실수 성분들을 식 (9)와 같은 순서로 z_j에 넣는다.
+
+$$
+\widehat x_j=F_N(\sqrt2z_j),\qquad
+\widehat d_j=\arg\min_{0\le q<Q}(\widehat x_j-\operatorname{lattice}[q])^2.
+\tag{24}
+$$
+
+D143–157의 min은 동점에서 첫 인덱스를 고른다.
+NumPy argmin의 첫 인덱스 규칙은 0-기반으로 대응한다.
+`np.rint`의 half-to-even이나 R6의 `floor(Q*x)`를 가져오지 않는다.
+후자는 일반 alpha 격자의 최근접 규칙이 아니다.
+
+#### 3.8 BG25–28, GB25–32, F113–116·128–130: Gray 라벨
+
+각 좌표의 자연 이진 정수 q에 대해 Gray 정수는
+
+$$
+g=q\mathbin{\mathrm{XOR}}(q\!\gg\!1),\qquad
+b_\ell=g_0\mathbin{\mathrm{XOR}}\cdots\mathbin{\mathrm{XOR}}g_\ell.
+\tag{25}
+$$
+
+첫 식은 Bin2Gray, 둘째는 Gray2Bin의 prefix XOR다.
+각 좌표 안에서는 MSB부터 쓴다.
+F114–115의 방향은 `payload → Gray2Bin → bit2int → +1 → encoder`다.
+F129–130에서는 `symbol-1 → int2bit → Bin2Gray`로 payload를 복원한다.
+
+전역 codeword 인덱스는 R6와 같은 자리 규약으로 새로 정의한다.
+
+$$
+k=\sum_{j=0}^{nd-1}d_jQ^j,\qquad
+\mathrm{bits}[k]=\mathrm{GrayBits}_{B0}(d_0)\Vert\cdots\Vert\mathrm{GrayBits}_{B0}(d_{nd-1}).
+\tag{26}
+$$
+
+첫 좌표는 k의 최하위 자리지만 그 좌표의 비트 그룹은 MSB 우선이다.
+`bits[k]`를 k의 단순 이진 표현으로 대신하면 안 된다.
+MATLAB 인코더가 이 전역 인덱스를 정의한 것은 아니다. 식 (26)은 **NEW R6 통합 규약**이다.
+
+### 4. MATLAB과 NumPy의 규약 차이 — [VERIFY V3]
+
+| 지점 | 포트에서 유지하거나 명시한 것 |
 |---|---|
-| 1-기반 인덱스 | MATLAB symbol = digit+1. Python 배열 내부·최종 codeword index는 모두 0-기반. +1은 참조 호출 경계에서만 |
-| BG26/GB26의 reshape | 실제 shape는 `(B0,nd)`이며 **열 하나가 한 좌표**다. 원본의 “rows” 주석을 따라 뒤집지 않는다 |
-| 열 우선 reshape | 한 블록에서 `b.reshape((B0,nd),order='F').T`는 `b.reshape((nd,B0))`와 같다. 배치는 `(n,nd,B0)`의 C-order로 표현한다. `(n,...)` 전체를 order='F'로 reshape해 블록을 섞지 않는다 |
-| E/D의 `(:)` | 각 블록 내부의 벡터화다. 배치 축을 포함한 전역 flatten과 다르다. A1에는 A2의 별도 reshape 절차를 이식하지 않는다 |
-| `'`와 `.'` | MATLAB `'`는 conjugate transpose. 배치에서는 `.conj().swapaxes(-1,-2)`. 3차원 `.T`는 배치 축까지 뒤집으므로 쓰지 않는다 |
-| SVD 반환 | MATLAB `[U,S,V]` 대 NumPy `(U,s,Vh)`. Q는 `U @ Vh`이지 `U @ Vh.conj().T`가 아니다 |
-| SVD 크기·순서 | 원본 D57은 full SVD. N>=2이면 reduced SVD의 상위 두 열로 충분하다. N<2에서는 원본 full U의 나머지 열이 식별된 신호 subspace라는 보장이 없어 G1_Y에서 거부한다 |
-| eig/eigh 순서 | NumPy eigh는 오름차순이므로 G의 마지막 두 열을 역순으로 취한다. sqrtm용 eig 재구성은 고유값과 고유벡터를 같이 쓰면 정렬 자체에 무관하다 |
-| 부호·복소 위상·중복값 | 서로 같은 U 원소를 요구하지 않는다. 선택된 두 차원 안의 임의 unitary 변화는 polar gauge에서 소거된다. 2번째와 3번째 고유값의 경계 동률 또는 singular C1에서는 subspace/gauge가 비유일하며 참조 인덱스 일치를 보장하지 않는다 |
-| sqrtm | Hermitian principal square root를 eigenvalue 함수로 재구성한다. Cholesky 대체, 비켤레 전치, elementwise sqrt는 틀린 이식이다 |
-| norm과 reduction | MATLAB은 한 블록의 vector norm. NumPy는 각 블록의 좌표 축만 줄인다. 축 없는 norm으로 전체 batch를 합치지 않는다 |
-| fzero | 같은 방정식의 유일근을 특수함수로 구한 신규 수치 구현. 3개 scalar solve를 Python 블록 루프로 감싸지 않는다. 반복 경로와 마지막 부동소수 비트 일치는 주장하지 않는다 |
-| 난수 | 같은 seed가 MATLAB/NumPy에서 같은 H,Z를 뜻하지 않는다. 교차 언어 대조에는 실제 Y를 공유한다. M=1 R6 대조만 동일 NumPy RNG 호출열을 비교한다 |
+| 1-기반 인덱스 | MATLAB symbol=digit+1. Python 내부와 최종 codeword index는 0-기반 |
+| BG26·GB26의 reshape | `(B0,nd)`의 **열 하나가 좌표 하나**다. 원본의 rows 주석이 아니라 실행문을 따른다 |
+| 열 우선 reshape | 한 블록의 `reshape((B0,nd),order='F').T`는 `reshape((nd,B0))`와 같다. 배치는 C-order `(n,nd,B0)`로 표현한다 |
+| batch와 `(:)` | 원본 `(:)`는 블록 내부 벡터화다. 배치 전체를 Fortran reshape해 서로 다른 블록을 섞지 않는다 |
+| 전치 | MATLAB `'`는 켤레전치, `.'`는 비켤레전치. 3차원 NumPy `.T`는 배치 축까지 뒤집는다. 행렬 켤레전치는 `.conj().swapaxes(-1,-2)`다 |
+| SVD 반환 | MATLAB `[U,S,V]`, NumPy `(U,s,Vh)`. Q는 `U @ Vh`이며 Vh를 다시 켤레전치하지 않는다 |
+| SVD 순서·크기 | 양쪽 모두 특이값 내림차순을 사용한다. D57의 full SVD는 N≥2에서 상위 두 reduced 열로 대체 가능하다 |
+| N<2 | full U가 추가로 주는 열은 식별된 rank-two 신호 subspace가 아니다. G1_Y에서 거부한다 |
+| eigh 순서 | NumPy는 오름차순이다. G의 마지막 두 열을 역순으로 취한다. sqrtm 재구성은 고유값과 대응 벡터를 함께 쓴다 |
+| 부호·위상·중복값 | U 원소의 직접 일치를 요구하지 않는다. 선택 subspace 안의 unitary 변화는 식 (20)으로 제거된다 |
+| 경계 동률 | 두 번째와 세 번째 고유값이 같으면 선택 subspace가 비유일하다. 이 경우 라이브러리 간 결정 일치를 보장하지 않는다 |
+| sqrtm | Hermitian principal square root를 쓴다. Cholesky나 elementwise sqrt로 대체하지 않는다 |
+| norm/reduction | 좌표 축만 줄인다. 축 없는 norm으로 batch 전체를 합치지 않는다 |
+| fzero | 식 (12)·(22)의 동일 방정식 해를 구한다. 원본 반복 경로와 floating-point 비트는 보존 대상이 아니다 |
+| 난수 | MATLAB과 NumPy의 같은 seed는 같은 H,Z를 뜻하지 않는다. 참조 비교에는 실제 Y를 공유한다 |
 
-수치 정책: double precision에서 unit interval과 PSD를 확인한다. 기계 epsilon의 상수배 이내의
-이탈만 clip한다. 역함수의 반올림된 1은 `nextafter(1,0)`으로 제한한다. 이 endpoint 정책도
-`NEW`이며 원본의 경계 fzero 동작과 같다고 주장하지 않는다. 큰 위반·비유한 값은 오류다.
-원본 D124–125의 [0,100] 밖 radial inverse 역시 오류로 처리한다.
+수치 guard는 double precision에서 기계 epsilon 상수배 안의 작은 이탈만 보정한다.
+역함수의 반올림된 상단 1은 `nextafter(1,0)`으로 제한한다.
+큰 domain 위반·비유한 값·원본 radial bracket [0,100] 밖의 해는 오류다.
+이 clipping과 영점 확장은 `NEW`이며 원본 경계 동작과 같다고 주장하지 않는다.
+G 경로는 Gram 형성 때문에 작은 singular value의 정보를 더 쉽게 잃는다.
+따라서 Y/G의 수치 rank guard가 모든 ill-conditioned 입력에서 같은 판정을 준다는 보장은 없다.
 
-## 6. 코드 — 추출 대상 `code/m2_gate.py`
+### 5. 코드 블록 1 — 추출 대상 `code/m2_gate.py`
 
-아래 블록은 한 모듈이다. 원본 R6를 같은 `code/` 경로에서 import한다.
-라이선스 고지를 포함해 그대로 추출한다. 라이브러리의 loop는 사전계산 chunk와 bit 축뿐이다.
+아래 모듈은 NumPy로 배치를 처리한다. 특수함수는 R6에도 있는 SciPy 의존성을 사용한다.
+라이선스 고지까지 포함해 추출한다. 이 문서만 커밋하며 원본 R6는 수정하지 않는다.
 
 ```python
-# NEW: A1 NumPy port; preserve the upstream notice below when extracting this module.
+# NEW: Preserve the upstream license below when extracting this A1 port.
 # BSD 3-Clause License
 #
 # Copyright (c) 2025, Diego Cuevas
@@ -607,187 +755,195 @@ def decode_G1(gl, G):  # NEW: R6-like (codebook,G) API; output is (n,) indices
     return _decode_basis(gl, vectors[:, :, -2:][:, :, ::-1])  # NEW(D58): eigh ascending, take largest two in descending order
 ```
 
-## 7. 검산 방법
+## 검산 방법
 
-이 절은 **실행할 assertion과 범위**다. 성능 추정치나 벤치마크를 쓰지 않는다.
+### 1. 사양 §7과의 대응
 
-| EXP §7 | 이 문서로 확인하는 것 / 남는 것 |
+| 항목 | 실행할 검사와 범위 |
 |---|---|
-| 1 | R6 Cube-split 입력에 대해 `(n,T)`와 `(n,T,1)`를 각각 비교. Y, RNG 잔여 상태, κ, Phi, 지표, ML 결정, 오류 개수 및 exact LLR까지 대조. 지표 상대오차 <1e-6과 동일 SER를 assert |
-| 2 | B0=1,2의 모든 codeword에서 `||X^HX-I₂||F<1e-10`. 샘플만 보는 것이 아님 |
-| 3 | 1000 무작위 인덱스 왕복. 별도의 bit-group XOR 구성으로 라벨 순서도 검사하여 잘못된 encoder/decoder가 서로 상쇄되는 경우를 막음 |
-| 4 | G1에 대해 2000 무잡음 블록을 Y 경로와 G 경로로 검사. **둘 다 모든 인덱스가 일치해야 함**. G2 부분은 다음 chat |
-| 5 | G2 미구현이므로 해당 없음. G1 점수 검사를 G2 검산이라고 바꾸어 부르지 않음 |
-| 6 | 이 환경에 Octave가 없어 미실행. 아래 참조 대조 절차로 따로 확인해야 함 |
-| 7 | 독립 complex128 trace 지표와 기존 float32 gvec/Phi 지표의 argmax를 대조. float32 Phi를 float64로 cast한 값을 ground truth로 쓰지 않음. 일치율 기준은 사양의 ≥0.999 |
-| 8 | 같은 float32 closeness의 eta번째와 eta+1번째 경계가 정확히 같은 횟수/분모를 기록. B=8이 기본이고 B=16 전체 setup은 명시적 full_lists 옵션으로 실행. skip을 전체 통과라고 쓰지 않음 |
-| 9 | LDPC는 재작성하지 않음. 원본 `sanity.py`와 R6 설정의 구성 검사를 별도로 실행. 여기서 새로 인증하지 않음 |
+| 1: M=1 환원 | 동일 Cube-split codebook에서 Y·RNG 상태·κ·Phi·지표·ML 결정·오류 개수·exact LLR 비교. 지표 상대오차 <1e-6 |
+| 2: Grassmann codebook | B0=1,2의 **모든** k에서 `||XᴴX-I₂||F<1e-10` |
+| 3: 라벨 | 1000 무작위 인덱스 왕복과 독립 bit-group XOR 비교 |
+| 4: 무잡음 복원 | G1만 검사. 2000 블록에서 Y 경로와 G 경로 모두 인덱스 완전 일치. G2는 다음 chat |
+| 5: G2≤ML | G2는 범위 밖이며 이 문서로 인증하지 않음 |
+| 6: 참조 구현 | Octave/MATLAB 미실행. 아래 참조 벡터 절차가 필요 |
+| 7: 정밀도 | 독립 complex128 trace와 기존 float32 fast ML argmax 일치율 ≥0.999 |
+| 8: 리스트 경계 | 계산된 float32 점수의 eta·eta+1 동점 횟수와 분모 기록. 전체 stable sort와 리스트를 대조 |
+| 9: LDPC | 재작성하지 않음. 원본 sanity와 실제 gate 설정에서 R6 구성·rate를 확인해야 함 |
 
-### 7.1 특히 item 1: M=1 환원
+**item 1 실행:** 송신 k 생성 RNG와 채널 RNG를 분리한다.
+동일 seed의 독립 RNG 세 개로 기존 channel, 새 legacy 입력, 새 `(n,T,1)` 입력을 비교한다.
+출력뿐 아니라 RNG 잔여 상태를 검사하므로 추가 난수 소모도 검출한다.
+같은 k에 대한 오류 **개수의 equality**로 같은 SER를 확인한다. 성능 수치를 새로 보고하지 않는다.
+기존 gvec·fast ML·exact LLR을 그대로 호출한다.
 
-송신 인덱스 생성용 RNG와 채널 RNG를 분리한다. 동일 seed로 만든 독립 RNG 세 개에 대해
-기존 R6 channel, 신규 channel의 legacy 입력, 신규 channel의 M=1 입력을 각각 호출한다.
-같은 출력만이 아니라 `bit_generator.state`도 비교해 몰래 추가된 난수 소모를 잡는다.
-R6 codebook, R6 gvec, R6 ML, R6 exact LLR을 그대로 사용한다.
-SER는 새로운 수치를 보고하지 않고 동일 송신 k에 대한 **오류 개수의 equality**로 검산한다.
-small Cube-split fixture의 통과는 모든 R6 실행 설정을 재현했다는 주장이 아니다.
+**item 4 실행:** 각 B0에서 k 2000개를 먼저 고정한다.
+H를 한 번 생성해 rank(H)=2를 확인하고 `Y0=sqrt(T/2)*(X@H)`를 만든다.
+이는 rho=1, Z=0이다. 잡음을 더하는 `channel()`을 호출하면 무잡음 검사가 아니다.
+두 G1 API의 반환값이 k와 완전히 같은지 assert한다.
+하나라도 틀리거나 예외가 나면 실패다. 해당 블록 삭제·H 재추출로 분모를 바꾸지 않는다.
+전체 codeword의 고정 identity-H 복원과 임의 right-unitary gauge 검사도 추가했다.
+identity-H 검사는 대수적 fixture이지 폐기된 물리적 N=M 특수 경우 주장이 아니다.
 
-### 7.2 특히 item 4: 무잡음 복원
+추가로 일반 M의 무작위 semiunitary 입력에서 trace와 chordal score를 독립 식으로 확인한다.
+작은 topm을 써서 fallback 경로를 강제로 검사한다.
+H34 방정식 잔차도 확인한다. 이 잔차 검사는 MATLAB 실행 비교를 대신하지 않는다.
 
-각 B0에서 2000개 k를 고정 seed로 뽑고 `X=gl.symbols(gl.from_index(k))`를 만든다.
-N>=2의 복소 Gaussian H를 한 번 생성하고 rank를 확인한다.
-**Y=sqrt(rho*T/2)*(X@H), Z=0**를 직접 만든다. `channel`은 항상 잡음을 더하므로 이 검산에 호출하지 않는다.
-`decode_G1_Y(gl,Y)==k`와 `decode_G1(gl,gram(Y))==k`를 모두 assert한다.
-하나라도 틀리거나 예외가 나면 검산 실패이며, 실패 블록을 버리거나 H를 다시 뽑아 분모를 바꾸지 않는다.
-아울러 전체 codebook을 고정 full-rank H로 복원하여 평행/직교 성분이 0인 경우도 검사한다.
-이것은 물리적 `N=M` 특수 경우를 주장하는 것이 아니라 대수적인 fixture다.
+### 2. 코드 블록 2 — 추출 대상 `code/sanity_m2.py`
 
-### 7.3 추출 대상 `code/sanity_m2.py`
-
-다음 코드는 새 검산 코드다. production 함수는 모두 앞 블록이나 원본 R6를 호출한다.
-JSON은 YAML의 부분집합이므로 설정 파일은 JSON 표기의 YAML로 저장하고 표준 라이브러리로 읽는다.
-별도 YAML 의존성을 설치하거나 기존 설정 loader가 있다고 가정하지 않는다.
+검산 코드는 모두 `NEW`다. 원본 알고리즘을 다시 구현하는 대신 앞 모듈과 R6를 호출한다.
+root residual과 직접 trace만 독립 산술 대조식으로 사용한다.
 
 ```python
-import json  # NEW: JSON is the supported dependency-free subset of YAML
+import json  # NEW: JSON-compatible YAML needs no additional dependency
 import sys  # NEW
 from pathlib import Path  # NEW
 import numpy as np  # NEW
-import cubesplit_gap as r6  # NEW: import the actual repository module on the server
+from scipy.special import gammainc  # NEW: equation-residual oracle, not a decoder
+import cubesplit_gap as r6  # NEW: actual unchanged project source
 import m2_gate as m2  # NEW: first Python block of GPT01
 
 
-def check_m1(cfg):  # NEW: spec 7 item 1; unchanged Cube-split encoder
+def check_m1(cfg):  # NEW: EXP section 7 item 1
     rng = np.random.default_rng(cfg['seed'])  # NEW
-    cs = r6.CubeSplit(4, 1)  # NEW: small R6 fixture, not a SER sweep
-    C, labels = cs.codebook()  # NEW
-    k = rng.integers(cs.K, size=2000)  # NEW: fixed input indices, separate from channel RNGs
-    X = C[:, k].T  # NEW: legacy (n,T)
-    phi0 = r6.codebook_features(C)  # NEW
-    for N in cfg['N_m1']:  # NEW: parameter loop, not a block loop
-        for rho in cfg['rho_linear']:  # NEW: parameter loop, no performance interpolation
-            a, b, c = (np.random.default_rng(cfg['seed']) for _ in range(3))  # NEW: independent identical RNG states
+    cs = r6.CubeSplit(4, 1)  # NEW: small R6 fixture, not a performance sweep
+    C, bits = cs.codebook()  # NEW
+    k = rng.integers(cs.K, size=2000)  # NEW: fixed test inputs
+    X, phi0 = C[:, k].T, r6.codebook_features(C)  # NEW
+    for N in cfg['N_m1']:  # NEW: parameter loop, not a received-block loop
+        for rho in cfg['rho_linear']:  # NEW: parameter loop
+            a, b, c = (np.random.default_rng(cfg['seed']) for _ in range(3))  # NEW: separate identical RNGs
             Y0 = r6.channel(a, X, N, rho)  # NEW
             Y1 = m2.channel(b, X, N, rho)  # NEW
-            Y2 = m2.channel(c, X[:, :, None], N, rho)  # NEW: explicit M=1 representation
-            assert np.array_equal(Y0, Y1) and np.array_equal(Y0, Y2)  # NEW: stronger than just SER equality
-            assert a.bit_generator.state == b.bit_generator.state == c.bit_generator.state  # NEW: detect hidden draws
+            Y2 = m2.channel(c, X[:, :, None], N, rho)  # NEW
+            assert np.array_equal(Y0, Y1) and np.array_equal(Y0, Y2)  # NEW: stronger than SER equality
+            assert a.bit_generator.state == b.bit_generator.state == c.bit_generator.state  # NEW
             assert m2.kappa_of(rho, cs.T) == r6.kappa_of(rho, cs.T)  # NEW
             assert m2.kappa_of(rho, cs.T, 1) == r6.kappa_of(rho, cs.T)  # NEW
             assert np.array_equal(m2.codebook_features(C), phi0)  # NEW
             phi1 = m2.codebook_features(C[:, None, :])  # NEW
             assert np.array_equal(phi1, phi0)  # NEW
-            G0, G2 = r6.gram(Y0), r6.gram(Y2)  # NEW: existing gram, no replacement
+            G0, G2 = r6.gram(Y0), r6.gram(Y2)  # NEW: unchanged gram
             met0, met1 = r6.ml_metrics_fast(G0, phi0), r6.ml_metrics_fast(G2, phi1)  # NEW
             rel = np.linalg.norm((met0 - met1).astype(float)) / max(np.linalg.norm(met0.astype(float)), np.finfo(float).tiny)  # NEW
-            assert rel < 1e-6  # NEW: spec item 1
+            assert rel < 1e-6  # NEW: item 1
             pred0, pred1 = met0.argmax(1), met1.argmax(1)  # NEW
-            assert np.array_equal(pred0, pred1)  # NEW: includes a consistent first-index ML tie rule
-            assert np.count_nonzero(pred0 != k) == np.count_nonzero(pred1 != k)  # NEW: exactly equal SER, no rates reported
-            L0 = r6.exact_llr_chunked(G0, phi0, labels, r6.kappa_of(rho, cs.T))  # NEW: unchanged exact LLR
-            L1 = r6.exact_llr_chunked(G2, phi1, labels, m2.kappa_of(rho, cs.T, 1))  # NEW
-            assert np.array_equal(L0, L1)  # NEW: additional integration check
+            assert np.array_equal(pred0, pred1)  # NEW
+            assert np.count_nonzero(pred0 != k) == np.count_nonzero(pred1 != k)  # NEW: same SER, no rates reported
+            L0 = r6.exact_llr_chunked(G0, phi0, bits, r6.kappa_of(rho, cs.T))  # NEW
+            L1 = r6.exact_llr_chunked(G2, phi1, bits, m2.kappa_of(rho, cs.T, 1))  # NEW
+            assert np.array_equal(L0, L1)  # NEW: additional unchanged-LLR integration test
 
 
-def check_a1(cfg):  # NEW: spec 7 items 2,3,4(G1),7; no G2 in this document
+def check_lists(gl, C, bits, cfg):  # NEW: EXP item 8, full stable-sort oracle
+    em = max(cfg['etas']) + 1  # NEW: eta+1 needed for boundary ties
+    lists, _ = m2.precompute_lists_sorted(gl, C, bits, em, cfg['chunk'], cfg['topm'])  # NEW: R6 argument order
+    C32 = np.ascontiguousarray(C, dtype=np.complex64)  # NEW
+    ties = {eta: 0 for eta in cfg['etas']}  # NEW: computed-score ties, not approximate ties
+    for s in range(0, gl.K, cfg['chunk']):  # NEW: codebook-chunk loop
+        e = min(s + cfg['chunk'], gl.K)  # NEW
+        corr = m2._chordal_rows(C32, s, e)  # NEW
+        for j in range(gl.B):  # NEW: bit-coordinate loop
+            for b in (0, 1):  # NEW
+                oracle = np.argsort(-np.where(bits[:, j] == b, corr, -1.0), axis=1, kind='stable')[:, :em]  # NEW
+                assert np.array_equal(lists[s:e, j, b], oracle)  # NEW: candidate order and fallback
+                selected = np.take_along_axis(corr, oracle, 1)  # NEW
+                for eta in cfg['etas']:  # NEW: list-size loop
+                    ties[eta] += int(np.count_nonzero(selected[:, eta - 1] == selected[:, eta]))  # NEW
+    for eta in cfg['etas']:  # NEW
+        print({'B': gl.B, 'eta': eta, 'boundary_equal_f32': ties[eta], 'denominator': gl.K * gl.B * 2})  # NEW: output measured counts only on execution
+
+
+def check_a1(cfg):  # NEW: EXP items 2,3,4(G1),7
     rng = np.random.default_rng(cfg['seed'])  # NEW
-    for B0 in (1, 2):  # NEW: spec T=4, B=8 and B=16
-        Q = 1 << B0  # NEW
-        alpha = cfg['alpha_fixture']  # NEW: explicit fixture, NOT a chosen gate alpha
+    for B0 in (1, 2):  # NEW: T=4, B=8 and 16
+        Q, alpha = 1 << B0, cfg['alpha_fixture']  # NEW: not a gate alpha choice
         lattice = alpha + np.arange(Q) * (1 - 2 * alpha) / (Q - 1)  # F91,99-100
         gl = m2.GrassLattice(4, B0, lattice)  # NEW
-        C, labels = gl.codebook()  # NEW
+        C, bits = gl.codebook()  # NEW
         Xall = C.transpose(2, 0, 1)  # NEW
-        error = np.linalg.norm(Xall.conj().swapaxes(1, 2) @ Xall - np.eye(2), axis=(1, 2))  # NEW
-        assert np.all(error < 1e-10)  # NEW: item 2, all K, not just transmitted words
+        err = np.linalg.norm(Xall.conj().swapaxes(1, 2) @ Xall - np.eye(2), axis=(1, 2))  # NEW
+        assert np.all(err < 1e-10)  # NEW: item 2, every codeword
         k = rng.integers(gl.K, size=1000)  # NEW: item 3
         d = gl.from_index(k)  # NEW
         assert np.array_equal(gl.index(gl.from_bits(gl.bits(d))), k)  # NEW
-        assert np.array_equal(gl.from_bits(labels[k]), d)  # NEW
-        binary = ((d[:, :, None] >> (B0 - 1 - np.arange(B0))) & 1).astype(np.uint8)  # NEW: independent bit-group fixture
-        gray = np.concatenate((binary[:, :, :1], binary[:, :, 1:] ^ binary[:, :, :-1]), 2)  # BG27; NEW: independent oracle, not a mapper in the library
-        assert np.array_equal(gray.reshape(1000, gl.B), labels[k])  # NEW: round-trip alone would miss a shared permutation error
-        k0 = rng.integers(gl.K, size=2000)  # NEW: item 4; never drop failures or singular blocks
+        assert np.array_equal(gl.from_bits(bits[k]), d)  # NEW
+        binary = ((d[:, :, None] >> (B0 - 1 - np.arange(B0))) & 1).astype(np.uint8)  # NEW: independent bit-group construction
+        gray = np.concatenate((binary[:, :, :1], binary[:, :, 1:] ^ binary[:, :, :-1]), 2)  # BG27; NEW: independent oracle
+        assert np.array_equal(gray.reshape(1000, gl.B), bits[k])  # NEW: round-trip alone misses a shared permutation
+        k0 = rng.integers(gl.K, size=2000)  # NEW: item 4, fixed denominator
         X0 = gl.symbols(gl.from_index(k0))  # NEW
-        for N in cfg['N_a1']:  # NEW: require N>=2; N=M is not given a special physical interpretation
-            assert N >= 2  # NEW
-            H = (rng.standard_normal((2000, 2, N)) + 1j * rng.standard_normal((2000, 2, N))) / np.sqrt(2)  # NEW: same law as spec 3
-            assert np.all(np.linalg.matrix_rank(H) == 2)  # NEW: do not redraw/discard rank failures
-            Y0 = np.sqrt(gl.T / 2) * (X0 @ H)  # NEW: rho=1, Z=0; do NOT call channel(), which always adds noise
-            assert np.array_equal(m2.decode_G1_Y(gl, Y0), k0)  # NEW: item 4 G1 in Y form, 2000/2000 required
-            assert np.array_equal(m2.decode_G1(gl, r6.gram(Y0)), k0)  # NEW: item 4 G1 in G form
-        fixed = np.broadcast_to(np.eye(2), (gl.K, 2, 2))  # NEW: additional all-codeword identity-channel fixture
-        assert np.array_equal(m2.decode_G1_Y(gl, Xall @ fixed), np.arange(gl.K))  # NEW: specifically exercises zero parallel/orthogonal components
-        phi = m2.codebook_features(C)  # NEW
-        ncheck = cfg['precision_blocks']  # NEW: choose before execution; do not change after seeing disagreements
+        for N in cfg['N_a1']:  # NEW: parameter loop
+            assert N >= 2  # NEW: no rank-two recovery claim when N<2
+            H = (rng.standard_normal((2000, 2, N)) + 1j * rng.standard_normal((2000, 2, N))) / np.sqrt(2)  # NEW
+            assert np.all(np.linalg.matrix_rank(H) == 2)  # NEW: no redraw or deletion of failures
+            Y0 = np.sqrt(gl.T / 2) * (X0 @ H)  # NEW: rho=1, Z=0; never call the noisy channel here
+            assert np.array_equal(m2.decode_G1_Y(gl, Y0), k0)  # NEW: item 4 Y path
+            assert np.array_equal(m2.decode_G1(gl, r6.gram(Y0)), k0)  # NEW: item 4 G path
+        assert np.array_equal(m2.decode_G1_Y(gl, Xall), np.arange(gl.K))  # NEW: all-codeword identity-H fixture, not a physical special case
+        R0 = rng.standard_normal((2000, 2, 2)) + 1j * rng.standard_normal((2000, 2, 2))  # NEW
+        U, _, vh = np.linalg.svd(R0)  # NEW: arbitrary right-unitary mixing, not just signs
+        assert np.array_equal(m2._decode_basis(gl, X0 @ (U @ vh)), k0)  # NEW: polar-gauge invariance
+        ncheck = cfg['precision_blocks']  # NEW: fixed before execution
         k1 = rng.integers(gl.K, size=ncheck)  # NEW
-        rho = cfg['precision_rho_linear']  # NEW: linear SNR input, not dB
-        Y = m2.channel(rng, gl.symbols(gl.from_index(k1)), cfg['N_a1'][-1], rho)  # NEW
-        G = r6.gram(Y)  # NEW
+        Y = m2.channel(rng, gl.symbols(gl.from_index(k1)), cfg['N_a1'][-1], cfg['precision_rho_linear'])  # NEW
+        G, phi = r6.gram(Y), m2.codebook_features(C)  # NEW
+        P = np.einsum('tmk,smk->tsk', C, C.conj())  # NEW: actual XX^H in complex128, not rounded Phi
         pred32, pred64 = np.empty(ncheck, np.int64), np.empty(ncheck, np.int64)  # NEW
-        P = np.einsum('tmk,smk->tsk', C, C.conj())  # NEW: actual XX^H, independent of the feature convention
-        for s in range(0, ncheck, cfg['chunk']):  # NEW: bounded batch chunk, not per-block Python loop
+        for s in range(0, ncheck, cfg['chunk']):  # NEW: batch-chunk loop
             e = min(s + cfg['chunk'], ncheck)  # NEW
-            m64 = np.einsum('nts,stk->nk', G[s:e], P).real  # NEW: direct complex128 trace, not float32 Phi cast to float64
+            m64 = np.einsum('nts,stk->nk', G[s:e], P).real  # NEW: independent double-precision trace
             m32 = r6.ml_metrics_fast(G[s:e], phi)  # NEW
-            assert np.linalg.norm(m64 - m32) / np.linalg.norm(m64) < 1e-6  # NEW: feature/gvec identity integration
+            assert np.linalg.norm(m64 - m32) / np.linalg.norm(m64) < 1e-6  # NEW
             pred32[s:e], pred64[s:e] = m32.argmax(1), m64.argmax(1)  # NEW
         assert np.mean(pred32 == pred64) >= 0.999  # NEW: item 7
-        if cfg['check_lists'] and (B0 == 1 or cfg['full_lists']):  # NEW: B=16 full setup is opt-in, never claim skipped coverage
-            etas = cfg['etas']  # NEW
-            em = max(etas) + 1  # NEW: need eta+1 to test the boundary
-            lists, _ = m2.precompute_lists_sorted(gl, C, labels, em, cfg['chunk'], cfg['topm'])  # NEW: unchanged argument order
-            C32 = np.ascontiguousarray(C, dtype=np.complex64)  # NEW
-            ties = {eta: 0 for eta in etas}  # NEW: exact computed-score ties only
-            for s in range(0, gl.K, cfg['chunk']):  # NEW: batch chunk
-                e = min(s + cfg['chunk'], gl.K)  # NEW
-                corr = m2._chordal_rows(C32, s, e)  # NEW
-                for j in range(gl.B):  # NEW: label-coordinate loop
-                    for b in (0, 1):  # NEW
-                        scores = np.where(labels[:, j] == b, corr, -1.0)  # NEW: full-row oracle
-                        oracle = np.argsort(-scores, axis=1, kind='stable')[:, :em]  # NEW: full stable order only in verification
-                        assert np.array_equal(lists[s:e, j, b], oracle)  # NEW: tests top-pool truncation/tie repair
-                        selected = np.take_along_axis(corr, oracle, 1)  # NEW
-                        for eta in etas:  # NEW: list-size loop
-                            ties[eta] += int(np.count_nonzero(selected[:, eta - 1] == selected[:, eta]))  # NEW: item 8
-            for eta in etas:  # NEW
-                print({'B': gl.B, 'eta': eta, 'boundary_equal_f32': ties[eta], 'denominator': gl.K * gl.B * 2})  # NEW: observed counts only when actually run
+        if cfg['check_lists'] and (B0 == 1 or cfg['full_lists']):  # NEW: large full setup is opt-in
+            check_lists(gl, C, bits, cfg)  # NEW
+        else:  # NEW: never report skipped coverage as complete
+            print({'B': gl.B, 'lists': 'not run'})  # NEW
 
 
-def check_generic(cfg):  # NEW: general-M arithmetic checks, not a channel-statistics experiment
+def check_generic(cfg):  # NEW: general-M feature, distance, and root-equation arithmetic
     rng = np.random.default_rng(cfg['seed'])  # NEW
-    for T in (1, 4):  # NEW: include M=T and the scalar edge case
-        for M in range(1, T + 1):  # NEW: rank-parameter loop, not a block loop
+    for T in (1, 4):  # NEW: dimensions of arithmetic fixtures
+        for M in range(1, T + 1):  # NEW: rank-parameter loop
             A = rng.standard_normal((16, T, M)) + 1j * rng.standard_normal((16, T, M))  # NEW
-            X, _ = np.linalg.qr(A, mode='reduced')  # NEW: arbitrary semiunitary test frames
-            C = X.transpose(1, 2, 0)  # NEW: general codebook layout
-            Y = m2.channel(rng, X, 2, 1.0)  # NEW: fixture rho=1
-            G = r6.gram(Y)  # NEW: unchanged gram
-            direct = np.einsum('tmk,nts,smk->nk', C.conj(), G, C).real  # NEW: independent trace
+            X, _ = np.linalg.qr(A, mode='reduced')  # NEW: semiunitary frames
+            C = X.transpose(1, 2, 0)  # NEW
+            G = r6.gram(m2.channel(rng, X, 2, 1.0))  # NEW
+            direct = np.einsum('tmk,nts,smk->nk', C.conj(), G, C).real  # NEW
             fast = r6.ml_metrics_fast(G, m2.codebook_features(C))  # NEW
             assert np.linalg.norm(fast - direct) / np.linalg.norm(direct) < 1e-6  # NEW
-            labels = ((np.arange(16)[:, None] >> np.arange(3, -1, -1)) & 1).astype(np.uint8)  # NEW: balanced test labels
-            corr = m2._chordal_rows(np.ascontiguousarray(C, dtype=np.complex64), 0, 16)  # NEW
-            lists, _ = m2.precompute_lists_sorted(None, C, labels, 4, chunk=4, topm=8)  # NEW: force the two-stage/fallback path
+            bits = ((np.arange(16)[:, None] >> np.arange(3, -1, -1)) & 1).astype(np.uint8)  # NEW
+            C32 = np.ascontiguousarray(C, dtype=np.complex64)  # NEW
+            corr = m2._chordal_rows(C32, 0, 16)  # NEW
+            pair = np.einsum('tma,tlb->amlb', C.conj(), C)  # NEW: independent all-pair inner products
+            assert np.allclose(corr, (np.abs(pair)**2).sum((1, 2)), rtol=1e-6, atol=1e-6)  # NEW
+            lists, _ = m2.precompute_lists_sorted(None, C, bits, 4, chunk=4, topm=8)  # NEW: exercise truncated pool/fallback
             for j in range(4):  # NEW: bit-coordinate loop
                 for b in (0, 1):  # NEW
-                    oracle = np.argsort(-np.where(labels[:, j] == b, corr, -1.0), axis=1, kind='stable')[:, :4]  # NEW
-                    assert np.array_equal(lists[:, j, b], oracle)  # NEW: includes all-equal-subspace case M=T
+                    oracle = np.argsort(-np.where(bits[:, j] == b, corr, -1.0), axis=1, kind='stable')[:, :4]  # NEW
+                    assert np.array_equal(lists[:, j, b], oracle)  # NEW
+    t = np.asarray([0.0, 0.001, 0.1, 0.5, 1.0, 2.0, 4.0])  # NEW: root-equation fixture, not a channel sweep
+    for order in (1, 2, 3, 4):  # NEW: function-order loop
+        theta = m2.thnt(order, t)  # NEW
+        residual = (order + 1)*theta**(2*order) - order*theta**(2*order + 2) - gammainc(order, t*t)  # H34; NEW: residual check
+        assert np.all(np.abs(residual) < 1e-12)  # NEW: arithmetic criterion, not MATLAB equivalence
 
 
-if __name__ == '__main__':  # NEW: repository-root invocation below
-    cfg = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))  # NEW: config file is JSON-compatible YAML
+if __name__ == '__main__':  # NEW
+    cfg = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))  # NEW: JSON subset of YAML
     check_m1(cfg)  # NEW
     check_generic(cfg)  # NEW
     check_a1(cfg)  # NEW
-    print('requested sanity assertions completed; G2, Octave, LDPC are not certified here')  # NEW: no performance estimate
+    print('completed named assertions; G2, Octave, and LDPC are not certified here')  # NEW
 ```
 
-### 7.4 설정과 실행 명령
+### 3. 설정과 실행
 
-다음은 **전부 신규 검산 설정**이며 gate 설정이 아니다. `alpha_fixture=0.01`은 F58에서 가져온
-검산 입력이지 최적 alpha가 아니다. rho 값들은 정규화 산술을 확인하는 입력이며 측정 결과가 아니다.
-`configs/GPT01_sanity.yaml`에 아래 JSON-표기 YAML을 저장한다.
+다음은 **검산 입력**이지 gate 설정 또는 측정 결과가 아니다.
+`alpha_fixture=0.01`은 F58의 입력 범위에서 택했다. 최적 alpha라는 뜻이 아니다.
+JSON 표기는 YAML의 부분집합이다. `configs/GPT01_sanity.yaml`로 저장하고 표준 라이브러리로 읽는다.
 
 ```json
 {
@@ -806,61 +962,93 @@ if __name__ == '__main__':  # NEW: repository-root invocation below
 }
 ```
 
-저장소 루트에서 실행한다. 이 문서의 첫 Python 블록을 `code/m2_gate.py`, 둘째 블록을
-`code/sanity_m2.py`로 저장한 뒤, 서버의 절대경로 Python을 사용한다.
-아래 셸 줄은 모두 신규 실행 절차이며 MATLAB 대응 줄은 없다.
+저장소 루트에서 코드 두 블록을 각각 위 경로로 추출한 후 실행한다.
+아래 셸 줄은 모두 `NEW` 절차다.
 
 ```bash
-PY="$HOME/miniforge3/envs/torch/bin/python"  # NEW: project interpreter rule
-mkdir -p logs  # NEW: local logs, not committed by this document
-OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$PY" code/sanity_m2.py configs/GPT01_sanity.yaml > logs/GPT01_sanity.log 2>&1  # NEW: assertion failure preserves exit status
+PY="$HOME/miniforge3/envs/torch/bin/python"  # NEW: repository interpreter convention
+mkdir -p logs  # NEW: local logs, not committed here
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$PY" code/sanity_m2.py configs/GPT01_sanity.yaml > logs/GPT01_sanity.log 2>&1  # NEW: preserve process exit status
 (cd code && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 "$PY" sanity.py) > logs/GPT01_R6_sanity.log 2>&1  # NEW: unchanged R6/LDPC checks
 ```
 
-**B=16 전체 리스트를 확인하려면 같은 설정 파일의 `full_lists`를 `true`로 바꾸어 별도 실행한다.**
-B=16의 전체 리스트를 실행하지 않은 로그에는 그 검사를 미실행으로 표시한다.
-실제 gate lattice가 정해지면 그 입력으로 다시 실행해야 하며 fixture alpha를 gate로 승격하지 않는다.
-이 문서는 숫자 로그를 `02_RESULTS_LOG.md`로 옮기거나 실험 완료를 선언하지 않는다.
+기본 설정은 B=16 전체 리스트 setup을 실행하지 않는다. 로그에도 미실행을 표시한다.
+이를 검사할 때는 `full_lists=true`로 바꾸어 별도 실행한다.
+실제 gate 격자가 결정되면 그 입력으로 모든 해당 검사를 다시 수행해야 한다.
+검산용 alpha를 결과를 본 뒤 gate 설정으로 승격하지 않는다.
 
-### 7.5 §8 참조 대조를 나중에 실행할 때
+### 4. 참조 대조 절차 — EXP §8
 
-먼저 grassbox의 실제 Git commit을 고정하고, 해당 commit의 E/D/H/BG/GB 파일을 첨부 파일과
-비교한다. 아래 첨부 SHA-256을 grassbox Git commit이라고 쓰지 않는다.
-Python에서 200개 digits와 실제 Y를 저장하고, 참조에 들어가는 symbol은 `digits+1`로 한다.
-MATLAB/Octave의 Y는 각 블록의 `(T,N)` 행렬이며 batch 축을 명시적으로 옮긴다.
-원본 인코더 출력은 `(T,2,200)`에서 `(200,T,2)`로 축만 옮겨 비교한다.
-원본 복호기의 symbol에서 1을 뺀 후 `sum_j digit_j Q^j`로 Python과 같은 전역 인덱스를 만든다.
-codeword 허용오차는 사양의 1e-10, 복호 인덱스는 완전 일치다.
+grassbox의 실제 Git commit을 고정하고 첨부 E/D/H/BG/GB와 비교한다.
+아래 SHA-256을 upstream Git commit이라고 쓰지 않는다.
+고정한 digits 200개와 실제 Y 200개를 양쪽에 동일하게 공급한다.
+같은 seed의 MATLAB/NumPy 난수 일치를 가정하지 않는다.
 
-동일 seed의 cross-language RNG에 의존하지 말고 동일 Y 배열을 양쪽에 공급해야 한다.
-출력 `.npz`에는 digits, lattice, Y, X_ref, k_ref, 고정한 grassbox commit을 함께 저장한다.
-원본이 NaN/실패를 내는 영점 사례는 숨기거나 재추출하지 말고 원본 한계와 NEW 확장의 차이로 기록한다.
-단순 NumPy 왕복이나 H34 잔차 검사는 이 참조 대조를 대체하지 않는다.
+참조 인코더에는 `digits+1`을 넣는다.
+참조 X의 `(T,2,n)`과 Python `(n,T,2)`는 **축만** 옮겨 대조한다.
+참조 복호기가 반환한 좌표에서는 1을 빼고 식 (26)으로 전역 인덱스를 계산한다.
+codeword 오차 기준은 사양의 1e-10이며 복호 인덱스는 완전히 같아야 한다.
+`.npz`에는 digits, lattice, Y, X_ref, k_ref, upstream commit을 보존한다.
+원본의 영점 NaN이나 실패 사례를 삭제하지 않는다. NEW 연속극한 확장과의 차이로 기록한다.
 
-## 8. ⚠️ 한계와 인수인계
+### 5. 이 대화에서 실제 확인한 범위
 
-**참조 구현과 대조하지 못했다.** 이 환경에는 Octave가 없었고 MATLAB도 실행하지 않았다.
-따라서 “원논문 복호기와 같다”거나 “§7 전체 통과”라고 쓰지 않는다.
-여기서 얻은 것은 .m 실행부에서 유도한 수학적으로 대응하는 포트와 명시적 경계 확장이다.
-특수함수 근, 영점 연속극한, unit-interval/PSD 수치 가드, numerical-rank 검사,
-canonical 리스트 동률 처리는 원본과 구별한 신규 구현이다.
-선택 subspace 경계 동률이나 singular chart에서 양 라이브러리의 인덱스 일치를 보장하지 않는다.
+첨부된 `cubesplit_gap.py` **전체를 변경 없이 import**하여 위 검산 코드를 실행했다.
+M=1 환원, 일반 M trace·거리, A1 라벨·semiunitarity·무잡음 복원,
+polar gauge, f32/f64 지표, 작은 codebook 리스트의 assertion이 통과했다.
+이는 해당 fixture의 내부 검산이다. 독립 검산이나 실제 gate 격자 인증은 아니다.
+생성된 수치 로그를 이 문서에서 새 실험 결과로 인용하지 않는다.
+B=16 전체 리스트, Octave/MATLAB, G2, 서버의 원본 LDPC sanity는 실행하지 않았다.
 
-이 환경에서는 문서의 Python 코드와 검산 코드를 임시 파일에서 실행해 assertion을 확인했다.
-R6 대조에는 연결 도구로 읽은 관련 원본 정의를 옮긴 **로컬 fixture**를 사용했다.
-이 fixture는 배포하지 않으며 원본 R6 파일 전체를 import한 서버 실행을 대신하지 않는다.
-검산에는 M=1 경로·특징 내적·일반 rank의 무작위 semiunitary 입력·A1의 두 크기·Gray 왕복·
-무잡음 G1·float32 대 float64 지표·작은 codebook의 리스트가 포함되었다.
-B=16 전체 리스트, Octave 대조, G2, 서버의 LDPC 검산은 이 실행으로 인증하지 않았다.
-검산 수치·시간·성능 결과는 여기서 새로 인용하지 않는다.
+## [VERIFY] 목록
 
-Claude 인수인계 순서는 코드 두 블록 추출 → 실제 R6 전체 파일을 사용한 검산 →
-격자 고정 → 해당 격자로 재검산 → 가능한 환경에서 §8 대조다.
-A2·G2 및 G2 중심 soft 비교는 별도 작업이다. 이 제안을 STATE “확정”에 자동으로 올리지 않는다.
+| ID | 아직 확정하지 않은 것 | 확인 방법 |
+|---|---|---|
+| V1 | 공통 M 일반화와 R6 통합 | 서버에서 블록 2의 M1·일반 M 검사를 실제 R6 전체 모듈로 재실행한다. 식 (3)·(7)·(8)을 독립 대조한다 |
+| V2 | A1 신규 유도와 수치적 재표현 | 식 (10)–(24), root 잔차, zero-limit를 검토한다. 고정 MATLAB 참조 벡터와 비교한다 |
+| V3 | MATLAB 포트의 indexing·Gray·SVD 대응 | 공유 digits/Y로 codeword와 복호 인덱스를 비교한다. 열 우선 그룹 순서와 arbitrary unitary gauge를 별도 검사한다 |
+| V4 | 실제 gate lattice/alpha | 저자가 설정 파일로 고정한 격자를 넣고 EXP §7의 2·3·4·7을 다시 실행한다 |
+| V5 | 리스트 동점 정책과 B=16 전체 setup | NEW 작은-index 우선 정책을 승인한 뒤 `full_lists=true`로 전체 stable-sort oracle 및 eta 경계를 대조한다 |
+| V6 | singular/near-boundary 수치 정책 | p=0·v=0·qbar=0·singular C1·작은 eigengap fixture를 구분한다. 원본 실패와 NEW 확장을 숨기지 않고 기록한다 |
+| V7 | LDPC 연결과 전체 gate readiness | 변경 없는 R6 sanity, 실제 gate LDPC 설정의 구성·rate를 확인한다. A2·G2는 별도 구현·검산한다 |
 
-## 부록 A. 첨부 원본 고정 정보
+[VERIFY]는 내부 fixture 통과만으로 닫지 않는다.
+특히 V2·V3의 참조 비교를 하지 않은 상태에서 “원논문 복호기와 같다”고 쓰지 않는다.
 
-아래 값은 이 대화에 실제 첨부된 바이트의 SHA-256이다. upstream Git commit의 증거가 아니다.
+## 이 결과가 바꾸는 것
+
+`00_STATE.md` “잔여 [VERIFY]” 5번의 **“코드 없음”**에만 다음 교체안을 제안한다.
+입력 사본에서는 69번째 줄이다.
+
+> 공통 M 층과 A1 G1 코드 초안은 GPT01에 있다. 독립·참조 검산 전이다.
+> A2, G2, soft 연결 및 gate 측정은 미완료다.
+
+같은 파일 “다음 작업” 5번은 완료 처리하지 않는다.
+“확정”, 기존 gate 판정, 네트워크·학습 제한을 바꾸지 않는다.
+`01_PLAN.md`의 STALE 절은 인용하거나 교체하지 않는다.
+`02_RESULTS_LOG.md`에 성능 결과를 추가하지 않는다. **성능은 측정 필요**다.
+이 제안은 문서 안의 변경안이며 STATE/PLAN 파일을 직접 수정하지 않았다.
+
+## ⚠️ 한계
+
+**참조 구현과 대조하지 못했다.** Octave가 설치되어 있지 않았고 MATLAB도 실행하지 않았다.
+같은 수학적 내부 사상에서 출발했지만 fzero 대신 특수함수 해를 썼다.
+영점 연속극한, roundoff guard, numerical-rank 거부와 동점 선택은 NEW 변경이다.
+이 차이를 숨긴 채 “그대로 재현했다”고 표현해서는 안 된다.
+
+격자 값이 사양에서 정해지지 않아 완성된 gate codebook은 아직 하나로 고정되지 않았다.
+부동소수 경계에서는 encoder contraction이 반올림되어 singular해질 수 있다.
+큰 domain 위반은 clip으로 덮지 않고 오류로 처리한다.
+G/Y 경로의 ill-conditioned rank 판정, 선택 subspace 경계 동률, singular polar gauge에는 동일 출력을 보장하지 않는다.
+
+A1의 전체 K 열거는 작은 gate codebook을 위한 것이다.
+int64 인덱스 범위가 허용된다는 사실은 큰 K의 메모리나 실행 가능성을 보장하지 않는다.
+일반 M 코드도 모든 extreme 차원·SNR에서 수치 정확도를 인증한 것은 아니다.
+SER/BLER 격차, 실행 시간, 비용 측정, 새로운 문헌은 이 산출물에 없다.
+
+### 첨부 원본 고정 정보
+
+아래는 첨부 바이트의 SHA-256이다. upstream Git commit의 증거가 아니다.
 
 | 파일 | SHA-256 |
 |---|---|
@@ -872,4 +1060,4 @@ A2·G2 및 G2 중심 soft 비교는 별도 작업이다. 이 제안을 STATE “
 | FindAlphaOpt.m | `44cc9d49813b59bbcbcc5ee3c6af6f4096b2d1dd6e96088066d3f6acdf823688` |
 | grassbox_LICENSE.txt | `6a725b2d47dec98c34a98a76239f2277acedd59e29daa45650d5c353de562ba4` |
 
-라이브러리 코드 머리말에 첨부 BSD-3 고지를 보존했다. 이를 코드로 추출할 때도 삭제하지 않는다.
+첨부 BSD-3 고지를 첫 코드 블록에 보존했다. 코드 추출 시에도 유지한다.
