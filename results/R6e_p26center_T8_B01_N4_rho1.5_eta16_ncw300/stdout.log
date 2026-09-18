@@ -1,0 +1,27 @@
+    lists 256/131072  fallbacks so far 0
+    lists 8448/131072  fallbacks so far 0
+    lists 16640/131072  fallbacks so far 0
+    lists 24832/131072  fallbacks so far 0
+    lists 33024/131072  fallbacks so far 0
+    lists 41216/131072  fallbacks so far 0
+    lists 49408/131072  fallbacks so far 0
+    lists 57600/131072  fallbacks so far 0
+    lists 65792/131072  fallbacks so far 0
+    lists 73984/131072  fallbacks so far 0
+    lists 82176/131072  fallbacks so far 0
+    lists 90368/131072  fallbacks so far 0
+    lists 98560/131072  fallbacks so far 0
+    lists 106752/131072  fallbacks so far 0
+    lists 114944/131072  fallbacks so far 0
+    lists 123136/131072  fallbacks so far 0
+lists: 388s fallbacks 0
+  50 cw: exact 0.0200  P26-D1 0.1800  P26-D3 0.1000  P26-cells 0.0400   (11s)
+  100 cw: exact 0.0500  P26-D1 0.2200  P26-D3 0.1400  P26-cells 0.0700   (22s)
+  150 cw: exact 0.0533  P26-D1 0.2400  P26-D3 0.1533  P26-cells 0.0933   (34s)
+  200 cw: exact 0.0450  P26-D1 0.2300  P26-D3 0.1500  P26-cells 0.0850   (45s)
+  250 cw: exact 0.0360  P26-D1 0.2440  P26-D3 0.1520  P26-cells 0.0720   (57s)
+  300 cw: exact 0.0367  P26-D1 0.2533  P26-D3 0.1500  P26-cells 0.0667   (68s)
+T=8 B0=1 N=4 rho=1.5 dB eta=16  ncw=300
+BLER: exact 0.0367  P26-D1 0.2533  P26-D3 0.1500  P26-cells 0.0667
+mean posterior mass inside candidate set: D1 0.786  D3 0.813  cells 0.892
+candidate set sizes: D1/D3 544, cells 4352

@@ -1,0 +1,29 @@
+# cmd.txt -- R6e p26_center_test
+
+## command as run (verbatim)
+cd /home/HTJ/ng/code && nohup /home/HTJ/miniforge3/envs/torch/bin/python -u p26_center_test.py 1.5 300 16 > ../results/R6e_p26center_T8_B01_N4_rho1.5_eta16_ncw300/stdout.log 2>&1 &
+
+## note on the interpreter
+README/instructions say 'python3 -u p26_center_test.py 1.5 300 16'.
+The PATH python3 (conda base, 3.14.7) has no numpy/scipy; project rule CLAUDE.md
+requires the 'torch' conda env via absolute path. Only the interpreter path differs;
+script, arguments (1.5 300 16) and the in-code seed (5) are unchanged.
+
+## sanity check (run first, same interpreter)
+cd /home/HTJ/ng/code && /home/HTJ/miniforge3/envs/torch/bin/python sanity.py 2>&1 | tee ../results/.../sanity.log
+  start 2026-09-18T11:31:09+09:00   end 2026-09-18T11:32:16+09:00   exit 0
+
+## lists_T8_B01_eta16.npy present before the run?
+no -> computed here (script precomputes the lists)
+
+## start
+2026-09-18T11:33:11+09:00
+
+## end
+2026-09-18T11:41:00+09:00
+
+## wall time (main run)
+2026-09-18T11:33:11+09:00 -- 2026-09-18T11:41:00+09:00 (~7m49s; list precompute 388s of it)
+
+## exit status
+0, last line is "candidate set sizes:" -> completed normally

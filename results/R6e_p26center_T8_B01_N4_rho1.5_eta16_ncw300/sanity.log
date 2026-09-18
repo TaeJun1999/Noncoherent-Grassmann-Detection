@@ -1,0 +1,17 @@
+CS(2,1): K=8 B=3  dmin computed 0.546546  Lemma-2 0.546546  NN-distance spread 0.00e+00
+CS(4,1): K=256 B=8  dmin computed 0.481507  Lemma-2 0.481507  NN-distance spread 0.00e+00
+bit round trip ok
+noiseless CS(4,1) K=256: D1=1.0000  D1r=1.0000  D2=1.0000  D3=1.0000
+noiseless CS(4,2) K=16384: D1=1.0000  D1r=1.0000  D2=1.0000  D3=1.0000
+noiseless CS(4,3) K=1048576: D1=1.0000  D1r=1.0000  D2=1.0000  D3=1.0000
+noiseless CS(8,1) K=131072: D1=1.0000  D1r=1.0000  D2=1.0000  D3=1.0000
+codebook CS(4,3) K=1048576 built in 0.5s
+ML metrics: argmax agree 1.0000, max rel diff 2.00e-07; time/block f64 42.4 ms, f32 37.7 ms
+  D3 metric <= ML max: True; D3==ML argmax 1.000
+P26 lists (eta=8) for K=16384: 59.0s
+  LLR sign agreement with sent bits: exact 0.9950  D3s 0.9948  P26 0.9950
+  corr(exact, D3s) 0.9895   corr(exact, P26) 0.9999
+LDPC n=1008 m=504 rank=502 k=506 rate=0.502
+  BPSK/AWGN Eb/N0=1.5 dB: BLER 0.220  (0.2s for 50 cw)
+  BPSK/AWGN Eb/N0=2.5 dB: BLER 0.040  (0.2s for 50 cw)
+  BPSK/AWGN Eb/N0=3.5 dB: BLER 0.020  (0.0s for 50 cw)
