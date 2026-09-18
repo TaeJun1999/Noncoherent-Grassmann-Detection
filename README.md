@@ -1,43 +1,50 @@
-# code_demo — 재현 코드
+# Noncoherent-Grassmann-Detection
 
-문서(00_STATE / 01_PLAN / 02_RESULTS_LOG / HANDOFF)는 이 repo에 없다. project knowledge가 유일한 출처다.
-이 repo는 코드만 담는다. 결과 파일(.log / .json / .npy)은 커밋하지 않는다.
+Rayleigh block-fading noncoherent MIMO의 Grassmann posterior를 생성 추론으로 푸는 연구.
+코드, 원시 로그, 연구 문서의 **원본**이다. Claude project와 GPT project의 문서는 이곳의 사본이다.
+
+## 구조
 
 ```
-code_demo/
-  code/       스크립트 전부. 이 안에서 실행한다
-  results/    실행 로그를 여기로 리다이렉트한다 (git 제외)
+code/                  스크립트 전부. R6 스크립트는 cubesplit_gap.py를 같은 디렉터리에서
+                       import하므로 code/ 안에서 실행한다
+docs/                  연구 문서
+results/<ID>_<설정>/   실행 원시 로그 (cmd.txt, env.txt, sanity.log, stdout.log)
 ```
+
+## 문서
+
+| 파일 | 역할 |
+|---|---|
+| `docs/00_STATE.md` | 현재 상태. 다른 문서와 충돌하면 이 파일이 이긴다 |
+| `docs/01_PLAN.md` | 정식화·주장·선행연구·baseline·설계. `⚠️ STALE` 절은 인용하지 않는다 |
+| `docs/02_RESULTS_LOG.md` | 실행한 실험의 기록. **인용 가능한 숫자의 유일한 출처** |
+| `docs/03_LIT_LOG.md` | 검색으로 확인한 선행연구. **논문 인용의 유일한 출처** |
+| `docs/derivations/D<n>_*.md` | GPT project 산출물. 제안이며 검산 전에는 확정이 아니다 |
+| `docs/handoff/*.md` | chat 간 인수인계 |
+| `docs/sessions/*.txt` | 서버 실행 세션 트랜스크립트 |
+| `docs/EXPERIMENTS.md` | 실행 대장. 한 실행 = 한 행. 인용 출처가 아니다 |
+
+문서 4개는 마일스톤마다 **통째로** 교체한다. 부분 수정하지 않는다.
 
 ## 실행
 
+파이썬은 절대경로로 부른다 (`CLAUDE.md`). PATH의 `python3`에는 numpy가 없다.
+
 ```
-pip install -r requirements.txt
+PY=~/miniforge3/envs/torch/bin/python
 cd code
-python3 sanity.py                                                           # R6 구현 검증, 약 3분
-python3 p26_center_test.py 1.5 300 16                                       # #4 [EXP], 약 12분 CPU
-python3 run_ser.py 8 1 4 4000 11              > ../results/ser_8_1_4.log
-python3 run_bler.py 8 1 4 60 300 900 5 16,32 1.0:3.0:0.5 > ../results/bler_8_1_4.log
+
+$PY sanity.py                                                            # R6 구현 검증
+$PY run_ser.py 8 1 4 4000 11                       > ../results/ser_8_1_4.log
+$PY run_bler.py 8 1 4 60 300 900 5 16,32 1.0:3.0:0.5 > ../results/bler_8_1_4.log
+$PY p26_center_test.py 1.5 300 16                                        # R6 (e)
 ```
 
-R6 스크립트는 `cubesplit_gap.py`를 같은 디렉터리에서 import하므로 `code/` 안에서 실행한다.
+의존성은 numpy와 scipy뿐이다. R6 재현은 1코어에서 약 50분.
 
-## 파일
+## 기록 규칙
 
-| 파일 | 항목 |
-|---|---|
-| code/verify_posterior.py | R1 정식화 검증 |
-| code/normalizer_and_sampler.py | R2 정규화 상수, gold-standard MH sampler |
-| code/scale_and_cost.py | R3 MACG 스케일, R4 비용 프로파일링 |
-| code/gap_experiment.py | R5 스펙트럼 폐기 비용 (대용 shortcut) |
-| code/cubesplit_gap.py | R6 라이브러리: Cube-split 원논문 구성·복호기·식 (26), exact ML, LDPC |
-| code/sanity.py | R6 구현 검증 |
-| code/run_ser.py | R6 SER 스윕. `run_ser.py T B0 N [nblocks] [seed]` |
-| code/run_bler.py | R6 BLER 스윕. `run_bler.py T B0 N nblk [ncw_min] [ncw_max] [seed] [etas] [lo:hi:step]` |
-| code/p26_center_test.py | R6 (e), 미실행. `p26_center_test.py rho_db ncw [eta]` |
-
-의존성은 numpy, scipy뿐. GPU 불필요.
-
-## 결과 반환
-
-stdout 원문(요약 금지), 스크립트가 남긴 JSON, 실행한 명령 그대로, 코드 수정이 있으면 diff, 환경(CPU/GPU, python·numpy·scipy 버전).
+- 숫자는 로그 **원문**에서만 옮긴다. 요약본에서 옮기지 않는다
+- 결과를 커밋할 때 `code_commit`과 `result_commit`을 함께 남긴다
+- `lists_*.npy`, 체크포인트, `logs/`는 커밋하지 않는다 (`.gitignore`)

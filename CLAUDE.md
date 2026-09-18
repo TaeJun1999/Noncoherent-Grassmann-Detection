@@ -62,8 +62,8 @@ RuntimeError: DataLoader worker (pid xxx) is killed by signal: Bus error
 - 실행 로그는 파일로 남길 것: `… 2>&1 | tee logs/$(date +%Y%m%d_%H%M).log`
 - 긴 학습은 tmux 안에서 실행
 - 커밋 메시지에 관련 실험 설정을 명시하면 나중에 추적이 쉽다
-- 실험이 끝나면 즉시 `docs/EXPERIMENTS.md`에 한 행 추가: 날짜, 설정 파일, seed, 커밋 해시, GPU, 핵심 지표, 로그 경로, 메모
-- 사용자가 결과 정리를 요청하면 `docs/RESULTS.md`를 갱신한다. 표와 수치는 EXPERIMENTS.md의 어느 행에서 왔는지 명시하고, 해석이나 결론은 쓰지 않는다 — 그건 사용자가 웹에서 한다
+- 실험이 끝나면 즉시 `docs/EXPERIMENTS.md`에 한 행 추가: 날짜, 설정 파일, seed, 커밋 해시, GPU, 핵심 지표, 로그 경로, 메모. 이 표는 실행 사실의 기록이고, 인용 가능한 숫자는 `docs/02_RESULTS_LOG.md`에 있다
+- 실험 결과를 문서에 반영할 때는 `docs/02_RESULTS_LOG.md`에 항목을 추가한다. 로그 원문의 숫자만 옮기고, 해석과 결론은 쓰지 않는다 — 그건 저자가 웹에서 한다
 - 웹에서 만든 계획 문서는 `docs/plans/`에 들어온다. 구현 요청에 계획 파일이 지정되면 그것을 먼저 읽는다
 
 ## Git
